@@ -24,6 +24,7 @@
 
 package org.car2x.veins.base.modules;
 
+
 // Interface for mobility modules
 moduleinterface IMobility
 {

@@ -28,6 +28,17 @@ using namespace veins;
 
 Define_Module(veins::TraCIDemoRSU11p);
 
+void TraCIDemoRSU11p::initialize(int stage)
+{
+    DemoBaseApplLayer::initialize(stage);
+    if (stage == 0) {
+        sentMessage = false;
+        lastDroveAt = simTime();
+        currentSubscribedServiceId = -1;
+    }
+    EV << "RSU: myId = " << myId;
+}
+
 void TraCIDemoRSU11p::onWSA(DemoServiceAdvertisment* wsa)
 {
     // if this RSU receives a WSA for service 42, it will tune to the chan

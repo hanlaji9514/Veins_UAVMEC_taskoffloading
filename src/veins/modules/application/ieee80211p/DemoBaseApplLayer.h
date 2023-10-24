@@ -29,6 +29,7 @@
 #include "veins/modules/messages/BaseFrame1609_4_m.h"
 #include "veins/modules/messages/DemoServiceAdvertisement_m.h"
 #include "veins/modules/messages/DemoSafetyMessage_m.h"
+#include "veins/modules/messages/BeaconMessage_m.h"
 #include "veins/base/connectionManager/ChannelAccess.h"
 #include "veins/modules/mac/ieee80211p/DemoBaseApplLayerToMac1609_4Interface.h"
 #include "veins/modules/mobility/traci/TraCIMobility.h"
@@ -87,6 +88,8 @@ protected:
 
     /** @brief this function is called upon receiving a DemoServiceAdvertisement */
     virtual void onWSA(DemoServiceAdvertisment* wsa){};
+
+    virtual void onBM(BeaconMessage* bm){};
 
     /** @brief this function is called every time the vehicle receives a position update signal */
     virtual void handlePositionUpdate(cObject* obj);
@@ -176,6 +179,7 @@ protected:
     uint32_t receivedWSMs;
     uint32_t receivedWSAs;
     uint32_t receivedBSMs;
+    uint32_t receivedBMs;
 
     /* messages for periodic events such as beacon and WSA transmissions */
     cMessage* sendBeaconEvt;

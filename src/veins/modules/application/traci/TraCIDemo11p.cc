@@ -56,11 +56,13 @@ void TraCIDemo11p::onWSM(BaseFrame1609_4* frame)
 
     findHost()->getDisplayString().setTagArg("i", 1, "green");
 
+    EV << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp() << " And the data: " << wsm->getDemoData();
+
     if (mobility->getRoadId()[0] != ':') traciVehicle->changeRoute(wsm->getDemoData(), 9999);
     if (!sentMessage) {
         sentMessage = true;
         // repeat the received traffic update once in 2 seconds plus some random delay
-        wsm->setSenderAddress(myId);
+        wsm->setSenderAddress(myId);//myId是該node的網卡（nic)的id
         wsm->setSerial(3);
         scheduleAt(simTime() + 2 + uniform(0.01, 0.2), wsm->dup());
     }
@@ -100,7 +102,9 @@ void TraCIDemo11p::handlePositionUpdate(cObject* obj)
             TraCIDemo11pMessage* wsm = new TraCIDemo11pMessage();
             populateWSM(wsm);
             wsm->setDemoData(mobility->getRoadId().c_str());
-
+            wsm->setTimestamp(simTime());
+            wsm->setSenderAddress(myId);
+            EV << "I'm " << myId << "and I sent a packet: " << wsm->getDemoData();
             // host is standing still due to crash
             if (dataOnSch) {
                 startService(Channel::sch2, 42, "Traffic Information Service");

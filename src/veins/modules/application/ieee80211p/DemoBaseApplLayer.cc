@@ -21,6 +21,7 @@
 //
 
 #include "veins/modules/application/ieee80211p/DemoBaseApplLayer.h"
+#include "veins/modules/messages/BeaconMessage_m.h"
 
 using namespace veins;
 
@@ -164,6 +165,14 @@ void DemoBaseApplLayer::populateWSM(BaseFrame1609_4* wsm, LAddress::L2Type rcvId
         bsm->addBitLength(beaconLengthBits);
         wsm->setUserPriority(beaconUserPriority);
     }
+    /*else if (BeaconMessage* bsm = dynamic_cast<BeaconMessage*>(wsm)) {
+        bsm->setSenderPos(curPosition);
+        bsm->setSenderSpeed(curSpeed);
+        bsm->setPsid(-1);
+        bsm->setChannelNumber(static_cast<int>(Channel::cch));
+        bsm->addBitLength(beaconLengthBits);
+        wsm->setUserPriority(beaconUserPriority);
+    }*/
     else if (DemoServiceAdvertisment* wsa = dynamic_cast<DemoServiceAdvertisment*>(wsm)) {
         wsa->setChannelNumber(static_cast<int>(Channel::cch));
         wsa->setTargetChannel(static_cast<int>(currentServiceChannel));
@@ -216,6 +225,10 @@ void DemoBaseApplLayer::handleLowerMsg(cMessage* msg)
     else if (DemoServiceAdvertisment* wsa = dynamic_cast<DemoServiceAdvertisment*>(wsm)) {
         receivedWSAs++;
         onWSA(wsa);
+    }
+    else if (BeaconMessage* bm = dynamic_cast<BeaconMessage*>(wsm)){
+        receivedBMs++;
+        onBM(bm);
     }
     else {
         receivedWSMs++;

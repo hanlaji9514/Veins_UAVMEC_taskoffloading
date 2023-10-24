@@ -30,7 +30,13 @@ namespace veins {
  * Small RSU Demo using 11p
  */
 class VEINS_API TraCIDemoRSU11p : public DemoBaseApplLayer {
+public:
+    void initialize(int stage) override;
+
 protected:
+    simtime_t lastDroveAt;
+    bool sentMessage;
+    int currentSubscribedServiceId;
     void onWSM(BaseFrame1609_4* wsm) override;
     void onWSA(DemoServiceAdvertisment* wsa) override;
 };
