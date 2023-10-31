@@ -44,14 +44,10 @@ namespace veins {
 
 struct task
 {
+    LAddress::L2Type id;
     int require_cpu;
     int require_memory;
     int packet_size;
-    double delay_limit;
-    int qos;
-    double start_time;
-    double expire_time;
-
 };
 
 struct resource
@@ -60,7 +56,7 @@ struct resource
     int remain_memory;
     double cal_capability = 2000000;
     std::queue<task> received_tasks; //從車輛端送來等待處理的task
-    std::queue<task> pending_tasks; //待處理之任務
+    std::list<task> handling_tasks; //處理中之任務
     std::list<task> waiting_tasks; //轉交給MEC等待其處理回傳的任務
 
     resource (int c, int m)
@@ -82,6 +78,7 @@ public:
     resource UAV_resource;
     std::map<LAddress::L2Type, MEC_MapData> MEC_map;
     MyTestUAV11p();
+    void handleReceivedTask();
 
 protected:
     simtime_t lastDroveAt;

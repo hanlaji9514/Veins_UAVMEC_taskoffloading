@@ -170,6 +170,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
             if (task_p >= 1 && task_p <= 20) // 使用if-else來判斷範圍
             {
                 task t(1);
+                t.id = myId;
                 t.start_time = simTime().dbl();
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
@@ -177,6 +178,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
             else if (task_p >= 21 && task_p <= 50)
             {
                 task t(2);
+                t.id = myId;
                 t.start_time = simTime().dbl();
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
@@ -184,6 +186,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
             else if (task_p >= 51 && task_p <= 75)
             {
                 task t(3);
+                t.id = myId;
                 t.start_time = simTime().dbl();
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
@@ -191,6 +194,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
             else if (task_p >= 76 && task_p <= 100)
             {
                 task t(4);
+                t.id = myId;
                 t.start_time = simTime().dbl();
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
@@ -231,7 +235,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
     else if(std::string(msg->getName()).substr(0, 7) == "myTask_")
     {
         int finish_size = std::stoi(std::string(msg->getName()).substr(7));
-        EV << "Handling finish. Size = " << finish_size << endl;
+        EV << myId << ": Handling finish. Size = " << finish_size << endl;
         for (auto it = node_resource.handling_tasks.begin(); it != node_resource.handling_tasks.end();)
         {
             if (it->packet_size == finish_size)
@@ -289,6 +293,14 @@ void MyTest11p::dispatchTask()
                     if(top_task.require_cpu <= UAV_in_my_Area.second.remain_cpu && top_task.require_memory <= UAV_in_my_Area.second.remain_memory)
                     {
                         EV << myId << ": I find UAV " << UAV_in_my_Area.first << " to handle my task!" << endl;
+                        std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
+                        TraCIDemo11pMessage *out_task = new TraCIDemo11pMessage;
+                        populateWSM(out_task);
+                        out_task->setByteLength(top_task.packet_size);
+                        out_task->setSenderAddress(myId);
+                        out_task->setRecipientAddress(UAV_in_my_Area.first);
+                        out_task->setName(s.c_str());
+                        sendDown(out_task);
                         break;
                     }
                     else

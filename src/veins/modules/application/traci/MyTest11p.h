@@ -47,6 +47,7 @@ namespace veins {
 
 struct task
 {
+    LAddress::L2Type id;
     int require_cpu;
     int require_memory;
     int packet_size;
@@ -89,6 +90,7 @@ public:
     resource node_resource;
     std::map<LAddress::L2Type, UAV_MapData> UAV_map;
     MyTest11p();
+    void dispatchTask();
 
 protected:
     simtime_t lastDroveAt;
@@ -101,7 +103,7 @@ protected:
     void onBSM(DemoSafetyMessage* wsm) override;
     void onBM(BeaconMessage* bsm) override;
 
-    void dispatchTask();
+
     void handleSelfMsg(cMessage* msg) override;
     void handlePositionUpdate(cObject* obj) override;
 

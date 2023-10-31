@@ -69,11 +69,32 @@ void MyTestUAV11p::onWSA(DemoServiceAdvertisment* wsa)
 void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
 {
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
+    //EV << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
+    if(std::string(wsm->getName()).substr(0, 10) == "UAV_handle")
+    {
+        EV << "UAV " << myId << ": Handling the task from " << wsm->getSenderAddress() << " and the packet size = " << wsm->getByteLength() << endl;
+        std::string name = wsm->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
 
-    //findHost()->getDisplayString().setTagArg("i", 1, "green");
+        // 使用 '_' 來分割字串
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
+        }
 
-    EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
-
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[2] 是 require_cpu
+        // seglist[3] 是 require_memory
+        task received_t;
+        received_t.id = wsm->getSenderAddress();
+        received_t.packet_size = wsm->getByteLength();
+        received_t.require_cpu = std::stoi(seglist[2]);
+        received_t.require_memory = std::stoi(seglist[3]);
+        UAV_resource.received_tasks.push(received_t);
+        handleReceivedTask();
+    }
     /*if (mobility->getRoadId()[0] != ':') traciVehicle->changeRoute(wsm->getDemoData(), 9999);
     if (!sentMessage) {
         sentMessage = true;
@@ -184,12 +205,70 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
 
         }
     }
+    else if (std::string(msg->getName()).substr(0, 5) == "Task_") // 幫車輛運算的任務計算完成，準備回傳給車輛
+    {
+        std::string name = msg->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
+
+        // 使用 '_' 來分割字串
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
+        }
+        LAddress::L2Type finish_id = std::stoi(seglist[1]);
+        int finish_size = std::stoi(seglist[2]);
+        for (auto it = UAV_resource.handling_tasks.begin(); it != UAV_resource.handling_tasks.end();)
+        {
+            if (it->packet_size == finish_size)
+            {
+                UAV_resource.remain_cpu += it->require_cpu;
+                UAV_resource.remain_memory += it->require_memory;
+                it = UAV_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
+                EV << "UAV " << myId << ": Handling finish. Size = " << finish_size << ", send back to car " << finish_id << endl;
+                break;
+            }
+            else
+            {
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
+            }
+        }
+        if(!UAV_resource.received_tasks.empty())
+            handleReceivedTask();
+    }
     else if(!strcmp(msg->getName(), "check_resource"))
     {
         EV << "I'm UAV " << myId << " and my remained cpu = " << UAV_resource.remain_cpu << ", remained memory = " << UAV_resource.remain_memory << endl;
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }
+}
+
+void MyTestUAV11p::handleReceivedTask()
+{
+    int loop_time = UAV_resource.received_tasks.size();
+    for(int i=0; i<loop_time; i++)
+    {
+        task top_task = UAV_resource.received_tasks.front();
+        UAV_resource.received_tasks.pop();
+        if(UAV_resource.remain_cpu >= top_task.require_cpu && UAV_resource.remain_memory >= top_task.require_memory) // 車輛自行處理
+        {
+            double cal_time = top_task.packet_size / (UAV_resource.cal_capability * top_task.require_cpu / 100.0);
+            UAV_resource.remain_cpu -= top_task.require_cpu;
+            UAV_resource.remain_memory -= top_task.require_memory;
+            std::string s = "Task_" + std::to_string(top_task.id) + "_" + std::to_string(top_task.packet_size);
+            EV << "UAV " << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << UAV_resource.remain_cpu << " remain memory = " << UAV_resource.remain_memory << endl;
+            UAV_resource.handling_tasks.push_back(top_task);
+            cMessage *Task_handlingTimer = new cMessage(s.c_str());
+            scheduleAt(simTime() + cal_time, Task_handlingTimer);
+        }
+        else
+        {
+            UAV_resource.received_tasks.push(top_task);
+        }
+    }
+
 }
 
 void MyTestUAV11p::handlePositionUpdate(cObject* obj)
