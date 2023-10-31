@@ -79,6 +79,8 @@ struct UAV_MapData
     double generate_time; // 收到該beacon的時間
     double Delay; // UAV傳送beacon至該車輛的delay
     double Delay_to_MEC; // 該UAV傳送beacon至Delay最小的MEC的Delay，-1代表該UAV沒有和MEC連線
+    int remain_cpu;
+    int remain_memory;
 };
 
 class VEINS_API MyTest11p : public DemoBaseApplLayer {

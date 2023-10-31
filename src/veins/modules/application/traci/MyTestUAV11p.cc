@@ -32,8 +32,6 @@ using namespace veins;
 
 Define_Module(veins::MyTestUAV11p);
 
-resource car_resource(200,200);
-
 std::map<LAddress::L2Type, MEC_MapData> MEC_map;
 
 double Delay_to_MEC = DBL_MAX;
@@ -47,12 +45,14 @@ void MyTestUAV11p::initialize(int stage)
         lastDroveAt = simTime();
         currentSubscribedServiceId = -1;
 
-        /*cMessage *resourceMsg = new cMessage("check_resource");
-        scheduleAt(simTime() + 0.1, resourceMsg);*/
+        cMessage *resourceMsg = new cMessage("check_resource");
+        scheduleAt(simTime() + 0.1, resourceMsg);
         cMessage *beaconTimer = new cMessage("beacon");
         scheduleAt(simTime() + 0.05, beaconTimer);
     }
 }
+
+MyTestUAV11p::MyTestUAV11p() : UAV_resource(200,200) {} // 讓每一個node都有其獨立的node_resource
 
 void MyTestUAV11p::onWSA(DemoServiceAdvertisment* wsa)
 {
@@ -153,8 +153,8 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         bsm->setTimestamp(simTime());
         if(Nearest_MEC != -1)
             bsm->setDelay_to_MEC(Delay_to_MEC);
-        bsm->setRemain_cpu(car_resource.remain_cpu);
-        bsm->setRemain_mem(car_resource.remain_memory);
+        bsm->setRemain_cpu(UAV_resource.remain_cpu);
+        bsm->setRemain_mem(UAV_resource.remain_memory);
         sendDown(bsm);
         cMessage *beaconTimer = new cMessage("beacon");
         scheduleAt(simTime() + 0.05, beaconTimer);
@@ -184,12 +184,12 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
 
         }
     }
-    /*else if(!strcmp(msg->getName(), "check_resource"))
+    else if(!strcmp(msg->getName(), "check_resource"))
     {
-        EV << "I'm " << myId << " and my remained cpu = " << car_resource.remain_cpu << ", remained memory = " << car_resource.remain_memory << endl;
+        EV << "I'm UAV " << myId << " and my remained cpu = " << UAV_resource.remain_cpu << ", remained memory = " << UAV_resource.remain_memory << endl;
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
-    }*/
+    }
 }
 
 void MyTestUAV11p::handlePositionUpdate(cObject* obj)

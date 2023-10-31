@@ -156,7 +156,7 @@ void MyTest11p::onBM(BeaconMessage* bsm)
     //BeaconMessage* bm = check_and_cast<BeaconMessage*>(bsm);
     //findHost()->getDisplayString().setTagArg("i", 1, "blue");
     EV_INFO << myId << ": I Receive a beacon from UAV " << bsm->getSenderAddress() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC();
-    UAV_map[bsm->getSenderAddress()] = {simTime().dbl(), (simTime() - bsm->getTimestamp()).dbl(), bsm->getDelay_to_MEC()};
+    UAV_map[bsm->getSenderAddress()] = {simTime().dbl(), (simTime() - bsm->getTimestamp()).dbl(), bsm->getDelay_to_MEC(), bsm->getRemain_cpu(), bsm->getRemain_mem()};
 }
 
 void MyTest11p::handleSelfMsg(cMessage* msg)
@@ -269,7 +269,7 @@ void MyTest11p::dispatchTask()
     {
         task top_task = node_resource.pending_tasks.front();
         node_resource.pending_tasks.pop();
-        if(node_resource.remain_cpu >= top_task.require_cpu && node_resource.remain_memory >= top_task.require_memory)
+        if(node_resource.remain_cpu >= top_task.require_cpu && node_resource.remain_memory >= top_task.require_memory && top_task.packet_size <= 22500) // 車輛自行處理
         {
             double cal_time = top_task.packet_size / (node_resource.cal_capability * top_task.require_cpu / 100.0);
             node_resource.remain_cpu -= top_task.require_cpu;
@@ -282,7 +282,28 @@ void MyTest11p::dispatchTask()
         }
         else
         {
-            node_resource.pending_tasks.push(top_task);
+            if(!UAV_map.empty())
+            {
+                for(auto UAV_in_my_Area : UAV_map)
+                {
+                    if(top_task.require_cpu <= UAV_in_my_Area.second.remain_cpu && top_task.require_memory <= UAV_in_my_Area.second.remain_memory)
+                    {
+                        EV << myId << ": I find UAV " << UAV_in_my_Area.first << " to handle my task!" << endl;
+                        break;
+                    }
+                    else
+                    {
+                        EV << myId << " : I find UAV " << UAV_in_my_Area.first << " in my area, but it isn't available!" << endl;
+                        node_resource.pending_tasks.push(top_task);
+                    }
+
+                }
+            }
+            else
+            {
+                EV << myId << " : No UAV in my area to help me!" << endl;
+                node_resource.pending_tasks.push(top_task);
+            }
         }
     }
     for(auto selfscheduledMessage : selfscheduledMessages)
