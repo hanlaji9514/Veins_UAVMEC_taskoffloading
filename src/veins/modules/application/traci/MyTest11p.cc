@@ -131,19 +131,35 @@ void MyTest11p::onWSA(DemoServiceAdvertisment* wsa)
 void MyTest11p::onWSM(BaseFrame1609_4* frame)
 {
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
+    //EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
+    if(std::string(wsm->getName()).substr(0, 12) == "TaskSendBack")
+    {
+        int Back_PacketSize = std::stoi(std::string(wsm->getName()).substr(13));
+        LAddress::L2Type Back_UAVID = wsm->getSenderAddress();
+        for (auto it = node_resource.waiting_tasks.begin(); it != node_resource.waiting_tasks.end();)
+        {
+            if (it->packet_size == Back_PacketSize)
+            {
+                if(simTime() > it->expire_time)
+                {
+                    EV << "Size = " << it->packet_size << " : packet loss!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
+                    EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
+                }
+                else
+                {
+                    EV << "Size = " << it->packet_size << " : handling success!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
+                    EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
+                }
+                it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
+                break;
+            }
+            else
+            {
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
+            }
+        }
+    }
 
-    //findHost()->getDisplayString().setTagArg("i", 1, "green");
-
-    EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
-
-    /*if (mobility->getRoadId()[0] != ':') traciVehicle->changeRoute(wsm->getDemoData(), 9999);
-    if (!sentMessage) {
-        sentMessage = true;
-        // repeat the received traffic update once in 2 seconds plus some random delay
-        wsm->setSenderAddress(myId);//myId是該node的網卡（nic)的id
-        wsm->setSerial(3);
-        scheduleAt(simTime() + 2 + uniform(0.01, 0.2), wsm->dup());
-    }*/
 }
 
 void MyTest11p::onBSM(DemoSafetyMessage* wsm)
@@ -294,13 +310,14 @@ void MyTest11p::dispatchTask()
                     {
                         EV << myId << ": I find UAV " << UAV_in_my_Area.first << " to handle my task!" << endl;
                         std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
-                        TraCIDemo11pMessage *out_task = new TraCIDemo11pMessage;
-                        populateWSM(out_task);
-                        out_task->setByteLength(top_task.packet_size);
-                        out_task->setSenderAddress(myId);
-                        out_task->setRecipientAddress(UAV_in_my_Area.first);
-                        out_task->setName(s.c_str());
-                        sendDown(out_task);
+                        TraCIDemo11pMessage *task_out_msg = new TraCIDemo11pMessage;
+                        populateWSM(task_out_msg);
+                        task_out_msg->setByteLength(top_task.packet_size);
+                        task_out_msg->setSenderAddress(myId);
+                        task_out_msg->setRecipientAddress(UAV_in_my_Area.first);
+                        task_out_msg->setName(s.c_str());
+                        sendDown(task_out_msg);
+                        node_resource.waiting_tasks.push_back(top_task);
                         break;
                     }
                     else

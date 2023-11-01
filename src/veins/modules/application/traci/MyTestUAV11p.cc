@@ -225,6 +225,14 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
             {
                 UAV_resource.remain_cpu += it->require_cpu;
                 UAV_resource.remain_memory += it->require_memory;
+                std::string s = "TaskSendBack_" + std::to_string(it->packet_size);
+                TraCIDemo11pMessage *SendBack = new TraCIDemo11pMessage;
+                populateWSM(SendBack);
+                SendBack->setByteLength(it->packet_size);
+                SendBack->setSenderAddress(myId);
+                SendBack->setRecipientAddress(it->id);
+                SendBack->setName(s.c_str());
+                sendDown(SendBack);
                 it = UAV_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 EV << "UAV " << myId << ": Handling finish. Size = " << finish_size << ", send back to car " << finish_id << endl;
                 break;
