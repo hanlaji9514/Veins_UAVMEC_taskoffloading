@@ -33,8 +33,6 @@ using namespace veins;
 
 Define_Module(veins::MyTestRSU11p);
 
-resource RSU_resource(10000,10000);
-
 void MyTestRSU11p::initialize(int stage)
 {
     DemoBaseApplLayer::initialize(stage);
@@ -49,6 +47,8 @@ void MyTestRSU11p::initialize(int stage)
         scheduleAt(simTime() + 0.1, beaconTimer);
     }
 }
+
+MyTestRSU11p::MyTestRSU11p() : RSU_resource(10000,10000) {} // 讓每一個RSU都有其獨立的RSU_resource
 
 void MyTestRSU11p::onWSA(DemoServiceAdvertisment* wsa)
 {
@@ -66,17 +66,36 @@ void MyTestRSU11p::onWSM(BaseFrame1609_4* frame)
 {
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
 
-    //findHost()->getDisplayString().setTagArg("i", 1, "green");
 
-    EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
-    /*if (mobility->getRoadId()[0] != ':') traciVehicle->changeRoute(wsm->getDemoData(), 9999);
-    if (!sentMessage) {
-        sentMessage = true;
-        // repeat the received traffic update once in 2 seconds plus some random delay
-        wsm->setSenderAddress(myId);//myId是該node的網卡（nic)的id
-        wsm->setSerial(3);
-        scheduleAt(simTime() + 2 + uniform(0.01, 0.2), wsm->dup());
-    }*/
+    //EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
+    if(std::string(wsm->getName()).substr(0, 10) == "MEC_handle") // MEC收到UAV轉傳過來的任務請求
+    {
+        std::string name = wsm->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
+
+        // 使用 '_' 來分割字串
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
+        }
+
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[2] 是 require_cpu
+        // seglist[3] 是 require_memory
+        // seglist[4] 是 source_id
+        task received_t;
+        received_t.source_id = std::stoi(seglist[4]);
+        received_t.relay_id = wsm->getSenderAddress();
+        received_t.packet_size = wsm->getByteLength();
+        received_t.require_cpu = std::stoi(seglist[2]);
+        received_t.require_memory = std::stoi(seglist[3]);
+        RSU_resource.pending_tasks.push(received_t);
+        EV << "RSU " << myId << ": Received a task from UAV " << wsm->getSenderAddress() << ", and the source car is " << received_t.source_id << endl;
+        handleReceivedTask();
+
+    }
 }
 
 void MyTestRSU11p::onBM(BeaconMessage* bsm)
@@ -99,30 +118,76 @@ void MyTestRSU11p::onBM(BeaconMessage* bsm)
 
 void MyTestRSU11p::handleSelfMsg(cMessage* msg)
 {
-    /*
-    if (TraCIDemo11pMessage* wsm = dynamic_cast<TraCIDemo11pMessage*>(msg)) {
-        // send this message on the service channel until the counter is 3 or higher.
-        // this code only runs when channel switching is enabled
-        sendDown(wsm->dup());
-        wsm->setSerial(wsm->getSerial() + 1);
-        if (wsm->getSerial() >= 3) {
-            // stop service advertisements
-            stopService();
-            delete (wsm);
+    if (std::string(msg->getName()).substr(0, 5) == "Task_") // 幫車輛運算的任務計算完成，準備回傳給車輛
+    {
+        std::string name = msg->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
+
+        // 使用 '_' 來分割字串
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
         }
-        else {
-            scheduleAt(simTime() + 1, wsm);
+        LAddress::L2Type source_id = std::stoi(seglist[1]);
+        int finish_size = std::stoi(seglist[2]);
+        for (auto it = RSU_resource.handling_tasks.begin(); it != RSU_resource.handling_tasks.end();)
+        {
+            if (it->packet_size == finish_size && it->source_id == source_id)
+            {
+                RSU_resource.remain_cpu += it->require_cpu;
+                RSU_resource.remain_memory += it->require_memory;
+                std::string s = "MECTaskSendBack_" + std::to_string(it->packet_size);
+                TraCIDemo11pMessage *SendBack = new TraCIDemo11pMessage;
+                populateWSM(SendBack);
+                SendBack->setByteLength(it->packet_size);
+                SendBack->setSenderAddress(myId);
+                SendBack->setRecipientAddress(it->relay_id);
+                SendBack->setName(s.c_str());
+                sendDown(SendBack);
+                EV << "RSU " << myId << ": Handling finish. Size = " << finish_size << ", send back to UAV " << it->relay_id << ", and Relay back to " << it->source_id << endl;
+                it = RSU_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
+                break;
+            }
+            else
+            {
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
+            }
         }
+        if(!RSU_resource.pending_tasks.empty())
+            handleReceivedTask();
     }
-    else {
-        DemoBaseApplLayer::handleSelfMsg(msg);
-    }
-    */
-    if(!strcmp(msg->getName(), "check_resource"))
+    else if(!strcmp(msg->getName(), "check_resource"))
     {
         EV << "I'm " << myId << " and my remained cpu = " << RSU_resource.remain_cpu << ", remained memory = " << RSU_resource.remain_memory << endl;
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
+    }
+}
+
+void MyTestRSU11p::handleReceivedTask()
+{
+    int loop_time = RSU_resource.pending_tasks.size();
+    for(int i=0; i<loop_time; i++)
+    {
+        task top_task = RSU_resource.pending_tasks.front();
+        RSU_resource.pending_tasks.pop();
+        if(RSU_resource.remain_cpu >= top_task.require_cpu && RSU_resource.remain_memory >= top_task.require_memory)
+        {
+            double cal_time = top_task.packet_size / (RSU_resource.cal_capability * top_task.require_cpu / 100.0);
+            RSU_resource.remain_cpu -= top_task.require_cpu;
+            RSU_resource.remain_memory -= top_task.require_memory;
+            std::string s = "Task_" + std::to_string(top_task.source_id) + "_" + std::to_string(top_task.packet_size);
+            EV << "RSU " << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << RSU_resource.remain_cpu << " remain memory = " << RSU_resource.remain_memory << endl;
+            RSU_resource.handling_tasks.push_back(top_task);
+            cMessage *Task_handlingTimer = new cMessage(s.c_str());
+            scheduleAt(simTime() + cal_time, Task_handlingTimer);
+        }
+        else
+        {
+            RSU_resource.pending_tasks.push(top_task);
+        }
     }
 }
 

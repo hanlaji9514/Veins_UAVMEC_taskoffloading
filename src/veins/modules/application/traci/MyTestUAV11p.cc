@@ -32,10 +32,9 @@ using namespace veins;
 
 Define_Module(veins::MyTestUAV11p);
 
-std::map<LAddress::L2Type, MEC_MapData> MEC_map;
 
-double Delay_to_MEC = DBL_MAX;
-LAddress::L2Type Nearest_MEC;
+
+
 
 void MyTestUAV11p::initialize(int stage)
 {
@@ -70,7 +69,7 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
 {
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
     //EV << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
-    if(std::string(wsm->getName()).substr(0, 10) == "UAV_handle")
+    if(std::string(wsm->getName()).substr(0, 10) == "UAV_handle") // 車輛傳送給UAV的任務請求
     {
         EV << "UAV " << myId << ": Handling the task from " << wsm->getSenderAddress() << " and the packet size = " << wsm->getByteLength() << endl;
         std::string name = wsm->getName();
@@ -94,6 +93,25 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
         received_t.require_memory = std::stoi(seglist[3]);
         UAV_resource.received_tasks.push(received_t);
         handleReceivedTask();
+    }
+    else if(std::string(wsm->getName()).substr(0, 14) == "UAV_MEC_handle") // 車輛傳送給UAV轉交給MEC的任務請求
+    {
+        EV << "UAV " << myId << ": Relaying the task from " << wsm->getSenderAddress() << " to " << Nearest_MEC << ", and the packet size = " << wsm->getByteLength() << endl;
+
+        std::string s = std::string(wsm->getName()).substr(4) + "_" + std::to_string(wsm->getSenderAddress());
+        TraCIDemo11pMessage *SendtoMEC = new TraCIDemo11pMessage;
+        populateWSM(SendtoMEC);
+        SendtoMEC->setByteLength(wsm->getByteLength());
+        SendtoMEC->setSenderAddress(myId);
+        SendtoMEC->setRecipientAddress(Nearest_MEC);
+        SendtoMEC->setName(s.c_str());
+        sendDown(SendtoMEC);
+
+    }
+    else if(std::string(wsm->getName()).substr(0, 15) == "MECTaskSendBack") // UAV收到MEC已經處理好的任務，回傳給車輛
+    {
+        EV << "UAV " << myId << ": Received the finished task from " << wsm->getSenderAddress() << ", and the packet size = " << wsm->getByteLength() << endl;
+
     }
     /*if (mobility->getRoadId()[0] != ':') traciVehicle->changeRoute(wsm->getDemoData(), 9999);
     if (!sentMessage) {
@@ -174,6 +192,8 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         bsm->setTimestamp(simTime());
         if(Nearest_MEC != -1)
             bsm->setDelay_to_MEC(Delay_to_MEC);
+        else
+            bsm->setDelay_to_MEC(-1);
         bsm->setRemain_cpu(UAV_resource.remain_cpu);
         bsm->setRemain_mem(UAV_resource.remain_memory);
         sendDown(bsm);
@@ -248,6 +268,14 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
     else if(!strcmp(msg->getName(), "check_resource"))
     {
         EV << "I'm UAV " << myId << " and my remained cpu = " << UAV_resource.remain_cpu << ", remained memory = " << UAV_resource.remain_memory << endl;
+        EV << "The MEC in my Area :";
+        for (const auto &pair : MEC_map)
+        {
+            LAddress::L2Type key = pair.first;
+
+            // 印出鍵和值
+            EV << " Key: " << key << ", Generation time: " << pair.second.generate_time << ", Delay to MEC: " << pair.second.Delay_to_MEC << endl;
+        }
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }

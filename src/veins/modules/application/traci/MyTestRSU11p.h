@@ -44,39 +44,20 @@ namespace veins {
 
 struct task
 {
-    int cpu_require;
-    int memory_require;
-    double delay_limit;
-    int qos;
-    double start_time;
-    double expire_time;
-
-    task (int q)
-    {
-        qos = q;
-        switch (q)
-        {
-            case 1:
-                delay_limit = (10.0 + fmod(rand() , 40.0)) / 1000.0; // 10ms~50ms
-                break;
-            case 2:
-                delay_limit = 100.0 / 1000.0; // 100ms
-                break;
-            case 3:
-                delay_limit = 150.0 / 1000.0; // 150ms
-                break;
-            case 4:
-                delay_limit = 300.0 / 1000.0; // 300ms
-                break;
-        }
-    }
+    LAddress::L2Type source_id;
+    LAddress::L2Type relay_id;
+    int require_cpu;
+    int require_memory;
+    int packet_size;
 };
 
 struct resource
 {
     int remain_cpu;
     int remain_memory;
+    double cal_capability = 10000000;
     std::queue<task> pending_tasks; //待處理之任務
+    std::list<task> handling_tasks; //處理中的任務
 
     resource (int c, int m)
     {
@@ -88,6 +69,9 @@ struct resource
 class VEINS_API MyTestRSU11p : public DemoBaseApplLayer {
 public:
     void initialize(int stage) override;
+    MyTestRSU11p();
+    resource RSU_resource;
+    void handleReceivedTask();
 
 protected:
     simtime_t lastDroveAt;

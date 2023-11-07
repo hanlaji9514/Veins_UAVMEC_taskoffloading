@@ -79,6 +79,8 @@ public:
     std::map<LAddress::L2Type, MEC_MapData> MEC_map;
     MyTestUAV11p();
     void handleReceivedTask();
+    double Delay_to_MEC = DBL_MAX;
+    LAddress::L2Type Nearest_MEC = -1;
 
 protected:
     simtime_t lastDroveAt;

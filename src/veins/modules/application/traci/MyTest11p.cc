@@ -31,6 +31,8 @@
 
 using namespace veins;
 
+int PacketLossTime = 0;
+
 Define_Module(veins::MyTest11p);
 
 std::mt19937 rnd_generator;
@@ -103,8 +105,8 @@ void MyTest11p::initialize(int stage)
     {
         cMessage *taskMsg = new cMessage("generate_task");
         scheduleAt(simTime() + uniform(0.1 , 5.0), taskMsg);
-        cMessage *resourceMsg = new cMessage("check_resource");
-        scheduleAt(simTime() + 0.1, resourceMsg);
+        /*cMessage *resourceMsg = new cMessage("check_resource");
+        scheduleAt(simTime() + 0.1, resourceMsg);*/
         cMessage *UAV_mapTimer = new cMessage("UAV_map");
         scheduleAt(simTime() + 2, UAV_mapTimer);
         /*TraCIDemo11pMessage *test = new TraCIDemo11pMessage;
@@ -142,7 +144,8 @@ void MyTest11p::onWSM(BaseFrame1609_4* frame)
             {
                 if(simTime() > it->expire_time)
                 {
-                    EV << "Size = " << it->packet_size << " : packet loss!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
+                    PacketLossTime++;
+                    EV << "Size = " << it->packet_size << " : packet loss!" << " This packet is handled by other node and send back from: " << Back_UAVID << "Packet Loss Time : " << PacketLossTime << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
                 else
@@ -259,9 +262,16 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
                 node_resource.remain_cpu += it->require_cpu;
                 node_resource.remain_memory += it->require_memory;
                 if(simTime() > it->expire_time)
-                    EV << "Size = " << it->packet_size << " : packet loss!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << endl;
+                {
+                    PacketLossTime++;
+                    EV << "Size = " << it->packet_size << " : packet loss!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << "Packet Loss Time : " << PacketLossTime << endl;
+                    EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
+                }
                 else
+                {
                     EV << "Size = " << it->packet_size << " : handling success!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << endl;
+                    EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
+                }
                 it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
@@ -289,50 +299,72 @@ void MyTest11p::dispatchTask()
     {
         task top_task = node_resource.pending_tasks.front();
         node_resource.pending_tasks.pop();
-        if(node_resource.remain_cpu >= top_task.require_cpu && node_resource.remain_memory >= top_task.require_memory && top_task.packet_size <= 22500) // 車輛自行處理
+        if(top_task.expire_time > simTime().dbl()) // 任務尚未過期，嘗試決定任務要怎麼offload
         {
-            double cal_time = top_task.packet_size / (node_resource.cal_capability * top_task.require_cpu / 100.0);
-            node_resource.remain_cpu -= top_task.require_cpu;
-            node_resource.remain_memory -= top_task.require_memory;
-            node_resource.handling_tasks.push_back(top_task);
-            std::string s = "myTask_"+ std::to_string(top_task.packet_size);
-            EV << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-            cMessage *Task_handlingTimer = new cMessage(s.c_str());
-            selfscheduledMessages.push_back({Task_handlingTimer, cal_time});
-        }
-        else
-        {
-            if(!UAV_map.empty())
+            if(node_resource.remain_cpu >= top_task.require_cpu && node_resource.remain_memory >= top_task.require_memory && top_task.packet_size <= 22500) // 車輛自行處理
             {
-                for(auto UAV_in_my_Area : UAV_map)
-                {
-                    if(top_task.require_cpu <= UAV_in_my_Area.second.remain_cpu && top_task.require_memory <= UAV_in_my_Area.second.remain_memory)
-                    {
-                        EV << myId << ": I find UAV " << UAV_in_my_Area.first << " to handle my task!" << endl;
-                        std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
-                        TraCIDemo11pMessage *task_out_msg = new TraCIDemo11pMessage;
-                        populateWSM(task_out_msg);
-                        task_out_msg->setByteLength(top_task.packet_size);
-                        task_out_msg->setSenderAddress(myId);
-                        task_out_msg->setRecipientAddress(UAV_in_my_Area.first);
-                        task_out_msg->setName(s.c_str());
-                        sendDown(task_out_msg);
-                        node_resource.waiting_tasks.push_back(top_task);
-                        break;
-                    }
-                    else
-                    {
-                        EV << myId << " : I find UAV " << UAV_in_my_Area.first << " in my area, but it isn't available!" << endl;
-                        node_resource.pending_tasks.push(top_task);
-                    }
-
-                }
+                double cal_time = top_task.packet_size / (node_resource.cal_capability * top_task.require_cpu / 100.0);
+                node_resource.remain_cpu -= top_task.require_cpu;
+                node_resource.remain_memory -= top_task.require_memory;
+                node_resource.handling_tasks.push_back(top_task);
+                std::string s = "myTask_"+ std::to_string(top_task.packet_size);
+                EV << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
+                cMessage *Task_handlingTimer = new cMessage(s.c_str());
+                selfscheduledMessages.push_back({Task_handlingTimer, cal_time});
             }
             else
             {
-                EV << myId << " : No UAV in my area to help me!" << endl;
-                node_resource.pending_tasks.push(top_task);
+                if(!UAV_map.empty())
+                {
+                    for(auto UAV_in_my_Area : UAV_map)
+                    {
+                        if(top_task.require_cpu <= UAV_in_my_Area.second.remain_cpu && top_task.require_memory <= UAV_in_my_Area.second.remain_memory && UAV_in_my_Area.second.Delay_to_MEC == -1)
+                        {
+                            EV << myId << ": I find UAV " << UAV_in_my_Area.first << " to handle my task!" << endl;
+                            std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
+                            TraCIDemo11pMessage *task_UAV_msg = new TraCIDemo11pMessage;
+                            populateWSM(task_UAV_msg);
+                            task_UAV_msg->setByteLength(top_task.packet_size);
+                            task_UAV_msg->setSenderAddress(myId);
+                            task_UAV_msg->setRecipientAddress(UAV_in_my_Area.first);
+                            task_UAV_msg->setName(s.c_str());
+                            sendDown(task_UAV_msg);
+                            node_resource.waiting_tasks.push_back(top_task);
+                            break;
+                        }
+                        else if(UAV_in_my_Area.second.Delay_to_MEC != -1)
+                        {
+                            EV << myId << " : I find UAV " << UAV_in_my_Area.first << " and it is connecting to a Edge Server!" << endl;
+                            std::string s = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
+                            TraCIDemo11pMessage *task_MEC_msg = new TraCIDemo11pMessage;
+                            populateWSM(task_MEC_msg);
+                            task_MEC_msg->setByteLength(top_task.packet_size);
+                            task_MEC_msg->setSenderAddress(myId);
+                            task_MEC_msg->setRecipientAddress(UAV_in_my_Area.first);
+                            task_MEC_msg->setName(s.c_str());
+                            sendDown(task_MEC_msg);
+                            node_resource.waiting_tasks.push_back(top_task);
+                            break;
+                        }
+                        else
+                        {
+                            EV << myId << " : I find UAV " << UAV_in_my_Area.first << " in my area, but it isn't available!" << endl;
+                            node_resource.pending_tasks.push(top_task);
+                        }
+
+                    }
+                }
+                else
+                {
+                    EV << myId << " : No UAV in my area to help me!" << endl;
+                    node_resource.pending_tasks.push(top_task);
+                }
             }
+        }
+        else
+        {
+            PacketLossTime++;
+            EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
     }
     for(auto selfscheduledMessage : selfscheduledMessages)
