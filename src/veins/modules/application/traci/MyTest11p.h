@@ -64,9 +64,9 @@ struct resource
     int remain_cpu;
     int remain_memory;
     double cal_capability = 1000000;
-    std::queue<task> pending_tasks; // µ¥«İ¤À°tªº¥ô°È(FIFO)
-    std::list<task> handling_tasks; // ¨®½ø¥¿¦b³B²zªº¥ô°È
-    std::list<task> waiting_tasks; // ¥æµ¹¨ä¥LUAVorMEC³B²z¡Aµ¥«İ¦^¶Çªº¥ô°È
+    std::queue<task> pending_tasks; // å¾…è™•ç†ä¹‹ä»»å‹™(FIFO)
+    std::list<task> handling_tasks; // æ­£åœ¨è¢«è™•ç†ä¹‹ä»»å‹™
+    std::list<task> waiting_tasks; // å‚³é€å‡ºå»ç­‰å¾…è™•ç†å®Œå›å‚³çš„ä»»å‹™
 
     resource (int c, int m)
     {
@@ -77,9 +77,9 @@ struct resource
 
 struct UAV_MapData
 {
-    double generate_time; // UAV beacon¥Í¦¨ªº®É¶¡
-    double Delay; // UAV beacon ¶Ç°e¹L¨Óªºdelay
-    double Delay_to_MEC; // UAV be¶Ç°e¦ÜªşªñMECªºdelay¡A­YUAVªşªñ¨S¦³MEC¡A«h¬°-1
+    double generate_time; // æ”¶åˆ°è©²beaconçš„æ™‚é–“
+    double Delay; // UAVå‚³é€beaconè‡³è©²è»Šè¼›çš„delay
+    double Delay_to_MEC; // è©²UAVå‚³é€beaconè‡³Delayæœ€å°çš„MECçš„Delayï¼Œ-1ä»£è¡¨è©²UAVæ²’æœ‰å’ŒMECé€£ç·š
     int remain_cpu;
     int remain_memory;
 };

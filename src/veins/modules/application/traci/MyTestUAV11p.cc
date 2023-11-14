@@ -69,7 +69,7 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
 {
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
     //EV << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
-    if(std::string(wsm->getName()).substr(0, 10) == "UAV_handle") // 車輛傳給MEC要求處理的請求
+    if(std::string(wsm->getName()).substr(0, 10) == "UAV_handle") // 車輛傳送給UAV的任務請求
     {
         EV << "UAV " << myId << ": Handling the task from " << wsm->getSenderAddress() << " and the packet size = " << wsm->getByteLength() << endl;
         std::string name = wsm->getName();
@@ -82,8 +82,9 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
            seglist.push_back(segment);
         }
 
-        // seglist[2]是require_cpu
-        // seglist[3]是require_memory
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[2] 是 require_cpu
+        // seglist[3] 是 require_memory
         task received_t;
         received_t.id = wsm->getSenderAddress();
         received_t.packet_size = wsm->getByteLength();
@@ -115,7 +116,7 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
     if (!sentMessage) {
         sentMessage = true;
         // repeat the received traffic update once in 2 seconds plus some random delay
-        wsm->setSenderAddress(myId);//myId�閰爽ode��雯�嚗ic)��d
+        wsm->setSenderAddress(myId);//myId是該node的網卡（nic)的id
         wsm->setSerial(3);
         scheduleAt(simTime() + 2 + uniform(0.01, 0.2), wsm->dup());
     }*/
@@ -186,7 +187,7 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         bsm->setSenderSpeed(curSpeed);
         // set the heading with the mobility module direction
         // send the BSM to the MAC layer immediately
-        bsm->setByteLength(300); //beacon message 約為300Bytes
+        bsm->setByteLength(300); //beacon message 大約為300Bytes
         bsm->setTimestamp(simTime());
         if(Nearest_MEC != -1)
             bsm->setDelay_to_MEC(Delay_to_MEC);
@@ -231,7 +232,6 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         std::string segment;
         std::vector<std::string> seglist;
         delete msg;
-
         while(std::getline(ss, segment, '_'))
         {
            seglist.push_back(segment);
@@ -252,13 +252,13 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
                 SendBack->setRecipientAddress(it->id);
                 SendBack->setName(s.c_str());
                 sendDown(SendBack);
-                it = UAV_resource.handling_tasks.erase(it);
+                it = UAV_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 EV << "UAV " << myId << ": Handling finish. Size = " << finish_size << ", send back to car " << finish_id << endl;
                 break;
             }
             else
             {
-                ++it;
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
             }
         }
         if(!UAV_resource.received_tasks.empty())
@@ -277,7 +277,6 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }
-
 }
 
 void MyTestUAV11p::handleReceivedTask()

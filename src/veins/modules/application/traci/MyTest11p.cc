@@ -67,13 +67,14 @@ task::task (int q)
             switch (packet_rnd)
             {
                 case 0 ... 40:
-                packet_size = 9375 + (int)(6562 * rnd / 100); // Priority 3 : packet size = 9375 ~ 15897 Bytes
+
+                packet_size = 9375 + (int)(6562 * rnd / 100); // Priority 3 : packet size = 9375 ~ 15897 Bytes（低負載）
                 break;
                 case 41 ... 80:
-                packet_size = 15898 + (int)(6563 * rnd / 100); // Priority 3 : packet size = 15892 ~ 22500 Bytes
+                packet_size = 15898 + (int)(6563 * rnd / 100); // Priority 3 : packet size = 15892 ~ 22500 Bytes（中負載）
                 break;
                 case 81 ... 100:
-                packet_size = 22500 + (int)(15000 * rnd / 100); // Priority 3 : packet size = 22500 ~ 37500 Bytes (車輛無法自行處理，必須交由UAV、MEC處理)
+                packet_size = 22500 + (int)(15000 * rnd / 100); // Priority 3 : packet size = 22500 ~ 37500 Bytes (高負載，車輛無法自主運算，須交由UAV、MEC處理)
                 break;
             }
             delay_limit = 150.0 / 1000.0; // 150ms
@@ -90,6 +91,7 @@ task::task (int q)
 }
 
 MyTest11p::MyTest11p() : node_resource(100,100) {} // 讓每個node都有自己的一個node_resource
+
 
 void MyTest11p::initialize(int stage)
 {
@@ -153,12 +155,13 @@ void MyTest11p::onWSM(BaseFrame1609_4* frame)
                     EV << "Size = " << it->packet_size << " : handling success!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
-                it = node_resource.handling_tasks.erase(it);
+
+                it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
             else
             {
-                ++it;
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
             }
         }
     }
@@ -186,7 +189,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
-            if (task_p >= 1 && task_p <= 20)
+            if (task_p >= 1 && task_p <= 20) // 使用if-else來判斷範圍
             {
                 task t(1);
                 t.id = myId;
@@ -222,6 +225,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
         }
         dispatchTask();
         delete msg;
+
 
         cMessage *taskMsg = new cMessage("generate_task");
         scheduleAt(simTime() + uniform(0.1 , 2.5), taskMsg);
@@ -276,12 +280,12 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
                     EV << "Size = " << it->packet_size << " : handling success!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
-                it = node_resource.handling_tasks.erase(it);
+                it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
             else
             {
-                ++it;
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
             }
         }
         if(!node_resource.pending_tasks.empty())
@@ -303,7 +307,7 @@ void MyTest11p::dispatchTask()
     {
         task top_task = node_resource.pending_tasks.front();
         node_resource.pending_tasks.pop();
-        if(top_task.expire_time > simTime().dbl()) // 任務還沒過期，決定要怎麼offload
+        if(top_task.expire_time > simTime().dbl()) // 任務尚未過期，嘗試決定任務要怎麼offload
         {
             if(node_resource.remain_cpu >= top_task.require_cpu && node_resource.remain_memory >= top_task.require_memory && top_task.packet_size <= 22500) // 車輛自行處理
             {

@@ -48,7 +48,7 @@ void MyTestRSU11p::initialize(int stage)
     }
 }
 
-MyTestRSU11p::MyTestRSU11p() : RSU_resource(10000,10000) {}
+MyTestRSU11p::MyTestRSU11p() : RSU_resource(10000,10000) {} // 讓每一個RSU都有其獨立的RSU_resource
 
 void MyTestRSU11p::onWSA(DemoServiceAdvertisment* wsa)
 {
@@ -68,21 +68,23 @@ void MyTestRSU11p::onWSM(BaseFrame1609_4* frame)
 
 
     //EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
-    if(std::string(wsm->getName()).substr(0, 10) == "MEC_handle") // MEC收到由UAV轉傳來的任務，必須處理
+    if(std::string(wsm->getName()).substr(0, 10) == "MEC_handle") // MEC收到UAV轉傳過來的任務請求
     {
         std::string name = wsm->getName();
         std::stringstream ss(name);
         std::string segment;
         std::vector<std::string> seglist;
 
+        // 使用 '_' 來分割字串
         while(std::getline(ss, segment, '_'))
         {
            seglist.push_back(segment);
         }
 
-        // seglist[2] � require_cpu
-        // seglist[3] � require_memory
-        // seglist[4] � source_id
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[2] 是 require_cpu
+        // seglist[3] 是 require_memory
+        // seglist[4] 是 source_id
         task received_t;
         received_t.source_id = std::stoi(seglist[4]);
         received_t.relay_id = wsm->getSenderAddress();
@@ -144,12 +146,12 @@ void MyTestRSU11p::handleSelfMsg(cMessage* msg)
                 SendBack->setName(s.c_str());
                 sendDown(SendBack);
                 EV << "RSU " << myId << ": Handling finish. Size = " << finish_size << ", send back to UAV " << it->relay_id << ", and Relay back to " << it->source_id << endl;
-                it = RSU_resource.handling_tasks.erase(it);
+                it = RSU_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
             else
             {
-                ++it;
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
             }
         }
         if(!RSU_resource.pending_tasks.empty())
