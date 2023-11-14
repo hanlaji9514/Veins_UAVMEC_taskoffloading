@@ -147,12 +147,12 @@ void MyTest11p::onWSM(BaseFrame1609_4* frame)
                 if(simTime() > it->expire_time)
                 {
                     PacketLossTime++;
-                    EV << "Size = " << it->packet_size << " : packet loss!" << " This packet is handled by other node and send back from: " << Back_UAVID << "Packet Loss Time : " << PacketLossTime << endl;
+                    EV << myId << ": Size = " << it->packet_size << " : packet loss!" << " This packet is handled by other node and send back from: " << Back_UAVID << " / Packet Loss Time : " << PacketLossTime << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
                 else
                 {
-                    EV << "Size = " << it->packet_size << " : handling success!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
+                    EV << myId << ": Size = " << it->packet_size << " : handling success!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
 
@@ -272,12 +272,12 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
                 if(simTime() > it->expire_time)
                 {
                     PacketLossTime++;
-                    EV << "Size = " << it->packet_size << " : packet loss!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << "Packet Loss Time : " << PacketLossTime << endl;
+                    EV << myId << ": Size = " << it->packet_size << " : packet loss!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << " / Packet Loss Time : " << PacketLossTime << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
                 else
                 {
-                    EV << "Size = " << it->packet_size << " : handling success!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << endl;
+                    EV << myId << ": Size = " << it->packet_size << " : handling success!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
                 it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器

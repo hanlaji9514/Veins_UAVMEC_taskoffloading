@@ -55,9 +55,9 @@ struct resource
     int remain_cpu;
     int remain_memory;
     double cal_capability = 2000000;
-    std::queue<task> received_tasks; //å¾è»Šè¼›ç«¯é€ä¾†ç­‰å¾…è™•ç†çš„task
-    std::list<task> handling_tasks; //è™•ç†ä¸­ä¹‹ä»»å‹™
-    std::list<task> waiting_tasks; //è½‰äº¤çµ¦MECç­‰å¾…å…¶è™•ç†å›å‚³çš„ä»»å‹™
+    std::queue<task> received_tasks; //±q¨®½øºİ°e¨Óµ¥«İ³B²zªºtask
+    std::list<task> handling_tasks; //³B²z¤¤¤§¥ô°È
+    std::list<task> waiting_tasks; //Âà¥æµ¹MECµ¥«İ¨ä³B²z¦^¶Çªº¥ô°È
 
     resource (int c, int m)
     {
@@ -68,8 +68,8 @@ struct resource
 
 struct MEC_MapData
 {
-    double generate_time; // æ”¶åˆ°è©²MEC ACKçš„æ™‚é–“
-    double Delay_to_MEC; // MECå‚³é€ACKå›åˆ°UAVçš„Delay
+    double generate_time; // ¦¬¨ì¸ÓMEC ACKªº®É¶¡
+    double Delay_to_MEC; // MEC¶Ç°eACK¦^¨ìUAVªºDelay
 };
 
 class VEINS_API MyTestUAV11p : public DemoBaseApplLayer {

@@ -97,6 +97,25 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
     {
         EV << "UAV " << myId << ": Relaying the task from " << wsm->getSenderAddress() << " to " << Nearest_MEC << ", and the packet size = " << wsm->getByteLength() << endl;
 
+        std::string name = wsm->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
+
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
+        }
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[3] 是 require_cpu
+        // seglist[4] 是 require_memory
+        task received_t;
+        received_t.id = wsm->getSenderAddress();
+        received_t.packet_size = wsm->getByteLength();
+        received_t.require_cpu = std::stoi(seglist[3]);
+        received_t.require_memory = std::stoi(seglist[4]);
+        UAV_resource.waiting_tasks.push_back(received_t);
+
         std::string s = std::string(wsm->getName()).substr(4) + "_" + std::to_string(wsm->getSenderAddress());
         TraCIDemo11pMessage *SendtoMEC = new TraCIDemo11pMessage;
         populateWSM(SendtoMEC);
@@ -109,8 +128,30 @@ void MyTestUAV11p::onWSM(BaseFrame1609_4* frame)
     }
     else if(std::string(wsm->getName()).substr(0, 15) == "MECTaskSendBack") // UAV收到MEC處理完成的任務，要轉傳回給車輛
     {
-        EV << "UAV " << myId << ": Received the finished task from " << wsm->getSenderAddress() << ", and the packet size = " << wsm->getByteLength() << endl;
-
+        int finish_size = wsm->getByteLength();
+        EV << "UAV " << myId << ": Received the finished task from " << wsm->getSenderAddress() << ", and the packet size = " << finish_size << endl;
+        for (auto it = UAV_resource.waiting_tasks.begin(); it != UAV_resource.waiting_tasks.end();)
+        {
+            EV << "!packet_size = " << it->packet_size << " And the finish_size = " << finish_size << endl;
+            if (it->packet_size == finish_size)
+            {
+                std::string s = "TaskSendBack_" + std::to_string(it->packet_size);
+                TraCIDemo11pMessage *SendBacktoNode = new TraCIDemo11pMessage;
+                populateWSM(SendBacktoNode);
+                SendBacktoNode->setByteLength(it->packet_size);
+                SendBacktoNode->setSenderAddress(myId);
+                SendBacktoNode->setRecipientAddress(it->id);
+                SendBacktoNode->setName(s.c_str());
+                sendDown(SendBacktoNode);
+                EV << "UAV " << myId << ": Send Back! Size = " << finish_size << ", send back to car " << it->id << endl;
+                it = UAV_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
+                break;
+            }
+            else
+            {
+                ++it;  // 如果當前元素不符合條件，則遞增迭代器
+            }
+        }
     }
     /*if (mobility->getRoadId()[0] != ':') traciVehicle->changeRoute(wsm->getDemoData(), 9999);
     if (!sentMessage) {
@@ -240,7 +281,7 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         int finish_size = std::stoi(seglist[2]);
         for (auto it = UAV_resource.handling_tasks.begin(); it != UAV_resource.handling_tasks.end();)
         {
-            if (it->packet_size == finish_size)
+            if (it->packet_size == finish_size && it->id == finish_id)
             {
                 UAV_resource.remain_cpu += it->require_cpu;
                 UAV_resource.remain_memory += it->require_memory;

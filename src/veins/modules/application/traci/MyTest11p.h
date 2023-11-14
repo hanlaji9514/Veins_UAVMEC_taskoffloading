@@ -75,6 +75,7 @@ struct resource
     }
 };
 
+
 struct UAV_MapData
 {
     double generate_time; // 收到該beacon的時間
