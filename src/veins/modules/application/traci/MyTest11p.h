@@ -92,6 +92,7 @@ public:
     std::map<LAddress::L2Type, UAV_MapData> UAV_map;
     MyTest11p();
     void dispatchTask();
+    cMessage *taskMsg;
 
 protected:
     simtime_t lastDroveAt;
@@ -103,6 +104,7 @@ protected:
     void onWSA(DemoServiceAdvertisment* wsa) override;
     void onBSM(DemoSafetyMessage* wsm) override;
     void onBM(BeaconMessage* bsm) override;
+    void finish() override;
 
 
     void handleSelfMsg(cMessage* msg) override;

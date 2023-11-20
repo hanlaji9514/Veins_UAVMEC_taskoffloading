@@ -31,7 +31,8 @@
 
 using namespace veins;
 
-int PacketLossTime = 0;
+double PacketLossTime = 0;
+double SuccessedTime = 0;
 
 Define_Module(veins::MyTest11p);
 
@@ -152,11 +153,12 @@ void MyTest11p::onWSM(BaseFrame1609_4* frame)
                 }
                 else
                 {
-                    EV << myId << ": Size = " << it->packet_size << " : handling success!" << " This packet is handled by other node and send back from: " << Back_UAVID << endl;
+                    SuccessedTime++;
+                    EV << myId << ": Size = " << it->packet_size << " : handling success!" << " This packet is handled by other node and send back from: " << Back_UAVID << " / Success Time : " << SuccessedTime << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
 
-                it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
+                it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
             else
@@ -185,7 +187,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
 {
     if(!strcmp(msg->getName(), "generate_task"))
     {
-        int numtasks = intuniform(1,5);
+        int numtasks = intuniform(3,8);
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
@@ -224,10 +226,10 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
             EV << "I'm " << myId << " and I generate a task: QoS = " << node_resource.pending_tasks.back().qos << " , Delay_limit : " << node_resource.pending_tasks.back().delay_limit <<  " , start_time = " << node_resource.pending_tasks.back().start_time << " , expire_time = " << node_resource.pending_tasks.back().expire_time << " , size = " << node_resource.pending_tasks.back().packet_size << endl;
         }
         dispatchTask();
-        delete msg;
+        //delete msg;
 
 
-        cMessage *taskMsg = new cMessage("generate_task");
+        //cMessage *taskMsg = new cMessage("generate_task");
         scheduleAt(simTime() + uniform(0.1 , 2.5), taskMsg);
     }
     else if(!strcmp(msg->getName(), "check_resource"))
@@ -277,7 +279,8 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
                 }
                 else
                 {
-                    EV << myId << ": Size = " << it->packet_size << " : handling success!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << endl;
+                    SuccessedTime++;
+                    EV << myId << ": Size = " << it->packet_size << " : handling success!" << " Now remain cpu = " << node_resource.remain_cpu << " / memory = " << node_resource.remain_memory << " / Success Time : " << SuccessedTime << endl;
                     EV << "The expire time : " << it->expire_time << ", and now is : " << simTime() << endl;
                 }
                 it = node_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
@@ -384,4 +387,14 @@ void MyTest11p::dispatchTask()
 void MyTest11p::handlePositionUpdate(cObject* obj)
 {
     DemoBaseApplLayer::handlePositionUpdate(obj);
+}
+
+void MyTest11p::finish()
+{
+    double TransRate = (SuccessedTime / (SuccessedTime + PacketLossTime));
+    double PacketLossRate = (PacketLossTime / (SuccessedTime + PacketLossTime));
+    EV << "Packet loss Time = " << PacketLossTime << endl;
+    EV << "Transmission Successes Time = " << SuccessedTime << endl;
+    EV << "Transmission Rate = " << TransRate << endl;
+    EV << "Packet Loss Rate = " << PacketLossRate << endl;
 }

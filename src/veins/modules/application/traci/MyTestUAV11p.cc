@@ -236,9 +236,9 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
             bsm->setDelay_to_MEC(-1);
         bsm->setRemain_cpu(UAV_resource.remain_cpu);
         bsm->setRemain_mem(UAV_resource.remain_memory);
-        delete msg;
+        //delete msg;
         sendDown(bsm);
-        cMessage *beaconTimer = new cMessage("beacon");
+        //cMessage *beaconTimer = new cMessage("beacon");
         scheduleAt(simTime() + 0.05, beaconTimer);
     }
     else if (std::string(msg->getName()).substr(0, 4) == "MEC_")
@@ -295,6 +295,27 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
                 sendDown(SendBack);
                 it = UAV_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 EV << "UAV " << myId << ": Handling finish. Size = " << finish_size << ", send back to car " << finish_id << endl;
+
+                BeaconMessage *bsm = new BeaconMessage("UAV_beacon"); // 更新目前的狀態給其他車輛知道
+                // populate some common properties with the BaseWaveApplLayer method
+                populateWSM(bsm);
+                bsm->setBeaconType(1);
+                bsm->setSenderAddress(myId);
+                // set the sender position with the mobility module position
+                bsm->setSenderPos(curPosition);
+                // set the speed with the mobility module speed
+                bsm->setSenderSpeed(curSpeed);
+                // set the heading with the mobility module direction
+                // send the BSM to the MAC layer immediately
+                bsm->setByteLength(300); //beacon message 大約為300Bytes
+                bsm->setTimestamp(simTime());
+                if(Nearest_MEC != -1)
+                    bsm->setDelay_to_MEC(Delay_to_MEC);
+                else
+                    bsm->setDelay_to_MEC(-1);
+                bsm->setRemain_cpu(UAV_resource.remain_cpu);
+                bsm->setRemain_mem(UAV_resource.remain_memory);
+                sendDown(bsm);
                 break;
             }
             else
@@ -314,8 +335,8 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
             LAddress::L2Type key = pair.first;
             EV << " Key: " << key << ", Generation time: " << pair.second.generate_time << ", Delay to MEC: " << pair.second.Delay_to_MEC << endl;
         }
-        delete msg;
-        cMessage *resourceMsg = new cMessage("check_resource");
+        //delete msg;
+        //cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }
 }
@@ -343,6 +364,26 @@ void MyTestUAV11p::handleReceivedTask()
             UAV_resource.received_tasks.push(top_task);
         }
     }
+    BeaconMessage *bsm = new BeaconMessage("UAV_beacon"); // 更新目前的狀態給其他車輛知道
+    // populate some common properties with the BaseWaveApplLayer method
+    populateWSM(bsm);
+    bsm->setBeaconType(1);
+    bsm->setSenderAddress(myId);
+    // set the sender position with the mobility module position
+    bsm->setSenderPos(curPosition);
+    // set the speed with the mobility module speed
+    bsm->setSenderSpeed(curSpeed);
+    // set the heading with the mobility module direction
+    // send the BSM to the MAC layer immediately
+    bsm->setByteLength(300); //beacon message 大約為300Bytes
+    bsm->setTimestamp(simTime());
+    if(Nearest_MEC != -1)
+        bsm->setDelay_to_MEC(Delay_to_MEC);
+    else
+        bsm->setDelay_to_MEC(-1);
+    bsm->setRemain_cpu(UAV_resource.remain_cpu);
+    bsm->setRemain_mem(UAV_resource.remain_memory);
+    sendDown(bsm);
 
 }
 

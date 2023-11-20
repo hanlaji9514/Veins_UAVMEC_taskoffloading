@@ -81,6 +81,8 @@ public:
     void handleReceivedTask();
     double Delay_to_MEC = DBL_MAX;
     LAddress::L2Type Nearest_MEC = -1;
+    cMessage *resourceMsg;
+    cMessage *beaconTimer;
 
 protected:
     simtime_t lastDroveAt;

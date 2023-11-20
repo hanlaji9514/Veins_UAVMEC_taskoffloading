@@ -34,7 +34,7 @@ void CircleMobility::initialize(int stage)
         center.z = stepTarget.z;
         R = par("r").doubleValue();
         angle = arc2deg( atan2((center.y - stepTarget.y), (stepTarget.x - center.x)), center, stepTarget );
-        if (angle < 0) angle += 2 * M_PI; // ensure angle is in [0, 2π]
+        if (angle < 0) angle += 2 * M_PI; // ensure angle is in [0, 2�]
 
     }
 }
@@ -50,7 +50,17 @@ void CircleMobility::makeMove()
     //EV << "angle = " << angle << endl;
     stepTarget.x = center.x + R * cos(angle * M_PI / 180.0);
     stepTarget.y = center.y + R * sin(angle * M_PI / 180.0);
-    move.setDirectionByVector(stepTarget - /*move.getStartPos()*/move.getPositionAt(simTime()));
+    //move.setDirectionByVector(stepTarget - /*move.getStartPos()*/move.getPositionAt(simTime()));
+    Coord direction = stepTarget - move.getPositionAt(simTime());
+    if (direction.length() != 0)
+    {
+        direction /= direction.length();  // Normalize the direction vector
+    }
+    if (!math::almost_equal(direction.squareLength(), 1.0) && !math::almost_equal(direction.squareLength(), 0.0))
+    {
+        direction /= direction.length();
+    }
+    move.setDirectionByVector(direction);
     //EV << "new step target of circle: " << stepTarget.info() << endl;
     fixIfHostGetsOutside();
 }
