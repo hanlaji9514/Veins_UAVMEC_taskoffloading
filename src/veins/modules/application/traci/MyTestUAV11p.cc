@@ -168,22 +168,28 @@ void MyTestUAV11p::onBM(BeaconMessage* bsm)
     if(bsm->getBeaconType() == 2)//收到MEC ACK
     {
         double d = (simTime() - bsm->getTimestamp()).dbl();
-        MEC_map[bsm->getSenderAddress()] = {simTime().dbl(), d};
+        double dx = bsm->getSenderPos().x - curPosition.x;
+        double dy = bsm->getSenderPos().y - curPosition.y;
+        double distance = sqrt(dx * dx + dy * dy);
+        MEC_map[bsm->getSenderAddress()] = {simTime().dbl(), d, distance};
         if(d < Delay_to_MEC && Nearest_MEC != bsm->getSenderAddress())// 擁有最低的delay
         {
             Delay_to_MEC = d;
             Nearest_MEC = bsm->getSenderAddress();
+            Distance_to_MEC = distance;
         }
         else if(d > Delay_to_MEC && Nearest_MEC == bsm->getSenderAddress())// 這個MEC是上次Delay最低的MEC，但是這次的Delay比較高，需要檢查他是否仍是所有MEC裡面Delay最低的，若不是就將其取代
         {
             Delay_to_MEC = d;
             Nearest_MEC = bsm->getSenderAddress();// 先寫進去，若他不是delay最低的就會被蓋掉，若是也已經寫進去了
+            Distance_to_MEC = distance;
             for(std::map<LAddress::L2Type, MEC_MapData>::iterator it = MEC_map.begin(); it != MEC_map.end(); it++)
             {
                 if((*it).second.Delay_to_MEC < Delay_to_MEC)
                 {
                     Delay_to_MEC = (*it).second.Delay_to_MEC;
                     Nearest_MEC = (*it).first;
+                    Distance_to_MEC = (*it).second.Distance_to_MEC;
                 }
             }
         }
@@ -196,25 +202,6 @@ void MyTestUAV11p::onBM(BeaconMessage* bsm)
 
 void MyTestUAV11p::handleSelfMsg(cMessage* msg)
 {
-    /*
-    if (TraCIDemo11pMessage* wsm = dynamic_cast<TraCIDemo11pMessage*>(msg)) {
-        // send this message on the service channel until the counter is 3 or higher.
-        // this code only runs when channel switching is enabled
-        sendDown(wsm->dup());
-        wsm->setSerial(wsm->getSerial() + 1);
-        if (wsm->getSerial() >= 3) {
-            // stop service advertisements
-            stopService();
-            delete (wsm);
-        }
-        else {
-            scheduleAt(simTime() + 1, wsm);
-        }
-    }
-    else {
-        DemoBaseApplLayer::handleSelfMsg(msg);
-    }
-    */
     if(!strcmp(msg->getName(), "beacon"))
     {
         BeaconMessage *bsm = new BeaconMessage("UAV_beacon");
@@ -231,14 +218,20 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
         bsm->setByteLength(300); //beacon message 大約為300Bytes
         bsm->setTimestamp(simTime());
         if(Nearest_MEC != -1)
+        {
             bsm->setDelay_to_MEC(Delay_to_MEC);
+            bsm->setDistance_to_MEC(Distance_to_MEC);
+        }
         else
+        {
             bsm->setDelay_to_MEC(-1);
+            bsm->setDistance_to_MEC(-1);
+        }
         bsm->setRemain_cpu(UAV_resource.remain_cpu);
         bsm->setRemain_mem(UAV_resource.remain_memory);
-        //delete msg;
+        delete msg;
         sendDown(bsm);
-        //cMessage *beaconTimer = new cMessage("beacon");
+        cMessage *beaconTimer = new cMessage("beacon");
         scheduleAt(simTime() + 0.05, beaconTimer);
     }
     else if (std::string(msg->getName()).substr(0, 4) == "MEC_")
@@ -252,6 +245,7 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
             // 刪除其中一個MEC後需要找剩下來中Delay最低的那個MEC
             Nearest_MEC = -1;
             Delay_to_MEC = DBL_MAX;
+            Distance_to_MEC = -1;
             if(!MEC_map.empty())
             {
                 for(std::map<LAddress::L2Type, MEC_MapData>::iterator it = MEC_map.begin(); it != MEC_map.end(); it++)
@@ -260,6 +254,7 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
                     {
                         Delay_to_MEC = (*it).second.Delay_to_MEC;
                         Nearest_MEC = (*it).first;
+                        Distance_to_MEC = (*it).second.Distance_to_MEC;
                     }
                 }
             }
@@ -335,8 +330,8 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
             LAddress::L2Type key = pair.first;
             EV << " Key: " << key << ", Generation time: " << pair.second.generate_time << ", Delay to MEC: " << pair.second.Delay_to_MEC << endl;
         }
-        //delete msg;
-        //cMessage *resourceMsg = new cMessage("check_resource");
+        delete msg;
+        cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }
 }
@@ -378,9 +373,15 @@ void MyTestUAV11p::handleReceivedTask()
     bsm->setByteLength(300); //beacon message 大約為300Bytes
     bsm->setTimestamp(simTime());
     if(Nearest_MEC != -1)
+    {
         bsm->setDelay_to_MEC(Delay_to_MEC);
+        bsm->setDistance_to_MEC(Distance_to_MEC);
+    }
     else
+    {
         bsm->setDelay_to_MEC(-1);
+        bsm->setDistance_to_MEC(-1);
+    }
     bsm->setRemain_cpu(UAV_resource.remain_cpu);
     bsm->setRemain_mem(UAV_resource.remain_memory);
     sendDown(bsm);

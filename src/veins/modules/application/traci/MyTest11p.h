@@ -45,6 +45,28 @@ namespace veins {
  *
  */
 
+struct LAB_par // 實驗參數
+{
+    double E1_car = 1; // 發送器所耗功率
+    double E2_car = 1.25; // 放大器所耗功率
+    double E3_car = 1.5; // 接收器所耗功率
+
+    double E1_UAV = 1;
+    double E2_UAV = 1.25;
+    double E3_UAV = 1.5;
+
+    double E1_MEC = 1;
+    double E2_MEC = 1.25;
+    double E3_MEC = 1.5;
+
+    double P_car = 1; // 處理任務所耗功率
+    double P_UAV = 1.25;
+    double P_MEC = 1.75;
+
+    double DelayRatio = 0.5;
+    double EnergyRatio = 0.5;
+};
+
 struct task
 {
     LAddress::L2Type id;
@@ -63,7 +85,7 @@ struct resource
 {
     int remain_cpu;
     int remain_memory;
-    double cal_capability = 1000000;
+    double cal_capability = 500000;
     std::queue<task> pending_tasks; // 待處理之任務(FIFO)
     std::list<task> handling_tasks; // 正在被處理之任務
     std::list<task> waiting_tasks; // 傳送出去等待處理完回傳的任務
@@ -79,8 +101,10 @@ struct resource
 struct UAV_MapData
 {
     double generate_time; // 收到該beacon的時間
+    Coord position; // UAV的所在位置
     double Delay; // UAV傳送beacon至該車輛的delay
     double Delay_to_MEC; // 該UAV傳送beacon至Delay最小的MEC的Delay，-1代表該UAV沒有和MEC連線
+    double Distance_to_MEC; //該UAV距離Delay最小的MEC的距離，-1代表該UAV沒有和MEC連線
     int remain_cpu;
     int remain_memory;
 };
@@ -92,7 +116,7 @@ public:
     std::map<LAddress::L2Type, UAV_MapData> UAV_map;
     MyTest11p();
     void dispatchTask();
-    cMessage *taskMsg;
+    void dispatchTaskConsiderEnergy();
 
 protected:
     simtime_t lastDroveAt;

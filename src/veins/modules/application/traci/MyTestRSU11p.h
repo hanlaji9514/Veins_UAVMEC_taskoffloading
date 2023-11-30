@@ -56,7 +56,7 @@ struct resource
 {
     int remain_cpu;
     int remain_memory;
-    double cal_capability = 10000000;
+    double cal_capability = 50000000;
     std::queue<task> pending_tasks; //待處理之任務
     std::list<task> handling_tasks; //處理中的任務
 

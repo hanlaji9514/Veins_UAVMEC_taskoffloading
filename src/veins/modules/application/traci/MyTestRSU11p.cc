@@ -103,7 +103,7 @@ void MyTestRSU11p::onBM(BeaconMessage* bsm)
     if(bsm->getBeaconType() == 1)
     {
         //findHost()->getDisplayString().setTagArg("i", 1, "blue");
-        EV_INFO << myId << " RSU: I Receive a beacon from UAV " << bsm->getSenderAddress() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC();
+        EV_INFO << myId << " RSU: I Receive a beacon from UAV " << bsm->getSenderAddress() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC() << " / Distance to MEC : " << bsm->getDistance_to_MEC();
         LAddress::L2Type recipientAddress = bsm->getSenderAddress();
         BeaconMessage *bm = new BeaconMessage("UAV_beacon_RSUACK");
         populateWSM(bm);
@@ -112,6 +112,7 @@ void MyTestRSU11p::onBM(BeaconMessage* bsm)
         bm->setByteLength(300);
         bm->setTimestamp(simTime());
         bm->setRecipientAddress(recipientAddress);
+        bm->setSenderPos(curPosition);
         sendDown(bm);
     }
 }

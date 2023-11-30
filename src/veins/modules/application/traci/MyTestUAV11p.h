@@ -54,7 +54,7 @@ struct resource
 {
     int remain_cpu;
     int remain_memory;
-    double cal_capability = 2000000;
+    double cal_capability = 1000000;
     std::queue<task> received_tasks; //從車輛端送來等待處理的task
     std::list<task> handling_tasks; //處理中之任務
     std::list<task> waiting_tasks; //轉交給MEC等待其處理回傳的任務
@@ -70,6 +70,7 @@ struct MEC_MapData
 {
     double generate_time; // 收到該MEC ACK的時間
     double Delay_to_MEC; // MEC傳送ACK回到UAV的Delay
+    double Distance_to_MEC; //MEC跟UAV的距離
 };
 
 class VEINS_API MyTestUAV11p : public DemoBaseApplLayer {
@@ -81,8 +82,7 @@ public:
     void handleReceivedTask();
     double Delay_to_MEC = DBL_MAX;
     LAddress::L2Type Nearest_MEC = -1;
-    cMessage *resourceMsg;
-    cMessage *beaconTimer;
+    double Distance_to_MEC = -1;
 
 protected:
     simtime_t lastDroveAt;
