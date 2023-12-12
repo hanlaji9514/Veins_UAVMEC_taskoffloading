@@ -28,13 +28,11 @@
 
 #include "veins/modules/messages/BeaconMessage_m.h"
 
-#include "veins/modules/mobility/TargetedMobility.h"
-
 using namespace veins;
 
 Define_Module(veins::MyTestUAV11p);
 
-int test = 0;
+
 
 
 
@@ -325,39 +323,6 @@ void MyTestUAV11p::handleSelfMsg(cMessage* msg)
     }
     else if(!strcmp(msg->getName(), "check_resource"))
     {
-        if(test == 0)
-        {
-            EV << "Change my destination!" << endl;
-
-            auto mobilityModule = check_and_cast<veins::TargetedMobility*>(getParentModule()->getSubmodule("mobility"));
-
-            // 新的目的地
-            veins::Coord newDestination(500, 100, 3);
-
-            // 呼叫targetMobility的去更新目的地
-            mobilityModule->updateDestination(newDestination);
-
-
-            test = 1;
-        }
-        else if(test == 1)
-        {
-            EV << "curPosition = " << curPosition << endl;
-            veins::Coord D(500, 100, 3);
-            if(curPosition == D)
-            {
-                EV << "Change the destination again!" << endl;
-                auto mobilityModule = check_and_cast<veins::TargetedMobility*>(getParentModule()->getSubmodule("mobility"));
-
-                // 新的目的地
-                veins::Coord newDestination(0, 700, 3);
-
-                // 呼叫targetMobility的去更新目的地
-                mobilityModule->updateDestination(newDestination);
-
-                test = 2;
-            }
-        }
         EV << "I'm UAV " << myId << " and my remained cpu = " << UAV_resource.remain_cpu << ", remained memory = " << UAV_resource.remain_memory << endl;
         EV << "The MEC in my Area :";
         for (const auto &pair : MEC_map)
@@ -427,3 +392,4 @@ void MyTestUAV11p::handlePositionUpdate(cObject* obj)
 {
     DemoBaseApplLayer::handlePositionUpdate(obj);
 }
+

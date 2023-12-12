@@ -225,3 +225,4 @@ void MyTestRSU11p::handlePositionUpdate(cObject* obj)
         lastDroveAt = simTime();
     }*/
 }
+
