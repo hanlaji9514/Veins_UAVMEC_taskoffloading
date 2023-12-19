@@ -62,9 +62,9 @@ struct UAV_resource
     LAddress::L2Type following_car;
     bool following;
     double following_time;
-    std::queue<task> received_tasks; //�q�����ݰe�ӵ��ݳB�z��task
-    std::list<task> handling_tasks; //�B�z��������
-    std::list<task> waiting_tasks; //��浹MEC���ݨ�B�z�^�Ǫ�����
+    std::queue<task> received_tasks; // 正在等待offloading的task
+    std::list<task> handling_tasks; // UAV正在處理的task
+    std::list<task> waiting_tasks; // UAV轉傳來自car傳送給MEC等待處理的task
 
     UAV_resource (int c, int m)
     {
@@ -75,9 +75,9 @@ struct UAV_resource
 
 struct MEC_MapData
 {
-    double generate_time; // �����MEC ACK���ɶ�
-    double Delay_to_MEC; // MEC�ǰeACK�^��UAV��Delay
-    double Distance_to_MEC; //MEC��UAV���Z��
+    double generate_time; // 收到MEC ACK確認連線的時間
+    double Delay_to_MEC; // MEC傳送ACK回給UAV所需的Delay
+    double Distance_to_MEC; //MEC與UAV之間的距離
 };
 
 class VEINS_API CoCaCoUAV : public DemoBaseApplLayer {
