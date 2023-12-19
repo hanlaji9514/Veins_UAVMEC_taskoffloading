@@ -46,6 +46,7 @@ void CoCaCoCar::initialize(int stage)
         currentSubscribedServiceId = -1;
         srand((unsigned int)time(NULL));
         rnd_generator = std::mt19937(rand());
+        node_resource.followed = false;
     }
     else if(stage == 1)
     {
@@ -116,8 +117,33 @@ void CoCaCoCar::onBM(BeaconMessage* bsm)
 {
     //BeaconMessage* bm = check_and_cast<BeaconMessage*>(bsm);
     //findHost()->getDisplayString().setTagArg("i", 1, "blue");
-    EV_INFO << myId << ": I Receive a beacon from UAV " << bsm->getSenderAddress() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC() << " / Distance to MEC : " << bsm->getDistance_to_MEC();
+    EV_INFO << myId << ": I Receive a beacon from UAV " << bsm->getSenderAddress() << " / it's name = " << bsm->getName() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC() << " / Distance to MEC : " << bsm->getDistance_to_MEC() << endl;
     UAV_map[bsm->getSenderAddress()] = {simTime().dbl(), bsm->getSenderPos(), (simTime() - bsm->getTimestamp()).dbl(), bsm->getDelay_to_MEC(), bsm->getDistance_to_MEC(), bsm->getRemain_cpu(), bsm->getRemain_mem()};
+    if(!node_resource.followed && !bsm->getFollowing())
+    {
+        EV << myId << ": UAV " << bsm->getSenderAddress() << " want to follow me!" << endl;
+
+        node_resource.tmp_Position = curPosition;
+        node_resource.tmp_time = simTime().dbl();
+        //EV << myId << ": tmp_Position =  " << node_resource.tmp_Position << " / tmp_time = " << node_resource.tmp_time << endl;
+
+        BeaconMessage *bm = new BeaconMessage("FollowMe");
+        populateWSM(bm);
+        bm->setSenderAddress(myId);
+        bm->setByteLength(300);
+        bm->setTimestamp(simTime());
+        bm->setRecipientAddress(bsm->getSenderAddress());
+        bm->setSenderPos(curPosition);
+        sendDown(bm);
+    }
+    if(!node_resource.followed && !strcmp(bsm->getName(), "FollowMe_ACK"))
+    {
+        node_resource.followed = true;
+        node_resource.followed_car = bsm->getSenderAddress();
+        EV << myId << ": I'm followed by UAV " << bsm->getSenderAddress() << "!" << endl;
+        cMessage *FollowMsg = new cMessage("Follow");
+        scheduleAt(simTime() + 0.05, FollowMsg);
+    }
 }
 
 void CoCaCoCar::handleSelfMsg(cMessage* msg)
@@ -228,6 +254,32 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
         }
         if(!node_resource.pending_tasks.empty())
             dispatchTaskConsiderEnergy();
+    }
+    else if(!strcmp(msg->getName(), "Follow"))
+    {
+        delete msg;
+        double sp = sqrt((curPosition.x - node_resource.tmp_Position.x) * (curPosition.x - node_resource.tmp_Position.x)
+                       + (curPosition.y - node_resource.tmp_Position.y) * (curPosition.y - node_resource.tmp_Position.y))
+                       / (simTime().dbl() - node_resource.tmp_time);
+        EV << myId << ": Please Keep Follow Me! curPosition = " << curPosition << " / sp = " << sp << endl;
+        //EV << "curPosition.x - node_resource.tmp_Position.x = " << (curPosition.x - node_resource.tmp_Position.x) << endl;
+        //EV << "curPosition.y - node_resource.tmp_Position.y = " << (curPosition.y - node_resource.tmp_Position.y) << endl;
+        //EV << "node_resource.tmp_time = " << node_resource.tmp_time << endl;
+        //EV << "simTime().dbl() = " << simTime().dbl() << endl;
+        node_resource.tmp_Position = curPosition;
+        node_resource.tmp_time = simTime().dbl();
+        BeaconMessage *bm = new BeaconMessage("KeepFollow");
+        populateWSM(bm);
+        bm->setSenderAddress(myId);
+        bm->setByteLength(300);
+        bm->setTimestamp(simTime());
+        bm->setRecipientAddress(node_resource.followed_car);
+        bm->setSenderPos(curPosition);
+        bm->setCurrentSpeed(sp);
+        //bm->setSenderSpeed(node_resource.cSpeed);
+        sendDown(bm);
+        cMessage *FollowMsg = new cMessage("Follow");
+        scheduleAt(simTime() + 0.1, FollowMsg);
     }
 }
 

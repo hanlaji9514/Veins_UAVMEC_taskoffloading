@@ -23,6 +23,7 @@
 #pragma once
 
 #include "veins/modules/application/ieee80211p/DemoBaseApplLayer.h"
+#include "veins/modules/mobility/TargetedMobility.h"
 #include <queue>
 #include <math.h>
 
@@ -50,16 +51,22 @@ struct task
     int packet_size;
 };
 
-struct resource
+struct UAV_resource
 {
     int remain_cpu;
     int remain_memory;
     double cal_capability = 1000000;
+    double following_speed;
+    double following_speed_1;
+    double following_speed_2;
+    LAddress::L2Type following_car;
+    bool following;
+    double following_time;
     std::queue<task> received_tasks; //�q�����ݰe�ӵ��ݳB�z��task
     std::list<task> handling_tasks; //�B�z��������
     std::list<task> waiting_tasks; //��浹MEC���ݨ�B�z�^�Ǫ�����
 
-    resource (int c, int m)
+    UAV_resource (int c, int m)
     {
         remain_cpu = c;
         remain_memory = m;
@@ -76,7 +83,7 @@ struct MEC_MapData
 class VEINS_API CoCaCoUAV : public DemoBaseApplLayer {
 public:
     void initialize(int stage) override;
-    resource UAV_resource;
+    UAV_resource UAV_resource;
     std::map<LAddress::L2Type, MEC_MapData> MEC_map;
     CoCaCoUAV();
     void handleReceivedTask();

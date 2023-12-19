@@ -43,6 +43,8 @@ void CoCaCoUAV::initialize(int stage)
         lastDroveAt = simTime();
         currentSubscribedServiceId = -1;
 
+        UAV_resource.following = false;
+
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
         cMessage *beaconTimer = new cMessage("beacon");
@@ -189,12 +191,54 @@ void CoCaCoUAV::onBM(BeaconMessage* bsm)
         cMessage *MECMsg = new cMessage(s.c_str());
         scheduleAt(simTime() + 2.0, MECMsg);
     }
+    else if(!UAV_resource.following && !strcmp(bsm->getName(), "FollowMe"))
+    {
+       UAV_resource.following_car = bsm->getSenderAddress();
+       UAV_resource.following = true;
+       UAV_resource.following_time = simTime().dbl();
+       EV << "UAV " << myId << ": I'm following the car " << UAV_resource.following_car << "!" << endl;
+       double sp = bsm->getCurrentSpeed();
+       UAV_resource.following_speed_2 = sp; // 跟隨車輛速度
+       BeaconMessage *bm = new BeaconMessage("FollowMe_ACK");
+       populateWSM(bm);
+       bm->setSenderAddress(myId);
+       bm->setByteLength(300);
+       bm->setTimestamp(simTime());
+       bm->setRecipientAddress(UAV_resource.following_car);
+       bm->setSenderPos(curPosition);
+       bm->setFollowing(UAV_resource.following);
+       sendDown(bm);
+    }
+    else if(!strcmp(bsm->getName(), "KeepFollow"))
+    {
+        UAV_resource.following_time = simTime().dbl();
+        double sp = bsm->getCurrentSpeed();
+        Coord following_loc = bsm->getSenderPos();
+        following_loc.z = 3;
+        EV << "sp = " << sp << endl;
+        UAV_resource.following_speed_1 = sp;
+        UAV_resource.following_speed =
+                0.8 * UAV_resource.following_speed_1 + 0.2 * (UAV_resource.following_speed_1 - UAV_resource.following_speed_2) + 1.0;
+        EV << "v-1 = " << UAV_resource.following_speed_1 << " / v-2 = " << UAV_resource.following_speed_2 << " / V = " << UAV_resource.following_speed << endl;
+        UAV_resource.following_speed_2 = UAV_resource.following_speed_1;
+        EV << "Change my destination to " << following_loc << ", and my speed is set to " << UAV_resource.following_speed << endl;
+        auto mobilityModule = check_and_cast<veins::TargetedMobility*>(getParentModule()->getSubmodule("mobility"));
+        // 呼叫targetMobility的去更新目的地
+        mobilityModule->par("speed").setDoubleValue(UAV_resource.following_speed);
+        mobilityModule->updateDestination(following_loc);
+    }
+
 }
 
 void CoCaCoUAV::handleSelfMsg(cMessage* msg)
 {
     if(!strcmp(msg->getName(), "beacon"))
     {
+        if(simTime().dbl() >= (UAV_resource.following_time + 0.5))
+        {
+            EV << "UAV " << myId << ": I'm loss the follow of car " << UAV_resource.following_car << endl;
+            UAV_resource.following = false;
+        }
         BeaconMessage *bsm = new BeaconMessage("UAV_beacon");
         // populate some common properties with the BaseWaveApplLayer method
         populateWSM(bsm);
@@ -208,6 +252,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
         // send the BSM to the MAC layer immediately
         bsm->setByteLength(300); //beacon message 大約為300Bytes
         bsm->setTimestamp(simTime());
+        bsm->setFollowing(UAV_resource.following);
         if(Nearest_MEC != -1)
         {
             bsm->setDelay_to_MEC(Delay_to_MEC);

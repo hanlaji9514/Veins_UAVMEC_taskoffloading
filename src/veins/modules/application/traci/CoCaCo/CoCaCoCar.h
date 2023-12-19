@@ -43,16 +43,21 @@ namespace veins {
  *
  */
 
-struct resource
+struct car_resource
 {
     int remain_cpu;
     int remain_memory;
+    bool followed;
+    double tmp_time;
+    Coord tmp_Position;
+    Coord cSpeed;
+    LAddress::L2Type followed_car;
     double cal_capability = 500000;
     std::queue<task> pending_tasks; // 待處理之任務(FIFO)
     std::list<task> handling_tasks; // 正在被處理之任務
     std::list<task> waiting_tasks; // 傳送出去等待處理完回傳的任務
 
-    resource (int c, int m)
+    car_resource (int c, int m)
     {
         remain_cpu = c;
         remain_memory = m;
@@ -74,7 +79,7 @@ struct UAV_MapData
 class VEINS_API CoCaCoCar : public DemoBaseApplLayer {
 public:
     void initialize(int stage) override;
-    resource node_resource;
+    car_resource node_resource;
     std::map<LAddress::L2Type, UAV_MapData> UAV_map;
     CoCaCoCar();
     void dispatchTask();
