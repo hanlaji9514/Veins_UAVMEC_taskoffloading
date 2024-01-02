@@ -170,12 +170,14 @@ void CoCaCoUAV::onBM(BeaconMessage* bsm)
             Delay_to_MEC = d;
             Nearest_MEC = bsm->getSenderAddress();
             Distance_to_MEC = distance;
+            MEC_Position = bsm->getSenderPos();
         }
         else if(d > Delay_to_MEC && Nearest_MEC == bsm->getSenderAddress())// 這個MEC是上次Delay最低的MEC，但是這次的Delay比較高，需要檢查他是否仍是所有MEC裡面Delay最低的，若不是就將其取代
         {
             Delay_to_MEC = d;
             Nearest_MEC = bsm->getSenderAddress();// 先寫進去，若他不是delay最低的就會被蓋掉，若是也已經寫進去了
             Distance_to_MEC = distance;
+            MEC_Position = bsm->getSenderPos();
             for(std::map<LAddress::L2Type, MEC_MapData>::iterator it = MEC_map.begin(); it != MEC_map.end(); it++)
             {
                 if((*it).second.Delay_to_MEC < Delay_to_MEC)
@@ -183,13 +185,14 @@ void CoCaCoUAV::onBM(BeaconMessage* bsm)
                     Delay_to_MEC = (*it).second.Delay_to_MEC;
                     Nearest_MEC = (*it).first;
                     Distance_to_MEC = (*it).second.Distance_to_MEC;
+                    MEC_Position = (*it).second.MEC_Position;
                 }
             }
         }
         EV << "UAV " << myId << " : add RSU " << bsm->getSenderAddress() << " in my area, delay = " << simTime().dbl() - bsm->getTimestamp() << endl;
         std::string s = "MEC_" + std::to_string(bsm->getSenderAddress());
         cMessage *MECMsg = new cMessage(s.c_str());
-        scheduleAt(simTime() + 2.0, MECMsg);
+        scheduleAt(simTime() + 1.0, MECMsg);
     }
     else if(!UAV_resource.following && !strcmp(bsm->getName(), "FollowMe"))
     {
@@ -213,15 +216,25 @@ void CoCaCoUAV::onBM(BeaconMessage* bsm)
     {
         UAV_resource.following_time = simTime().dbl();
         double sp = bsm->getCurrentSpeed();
+        Coord MovingDiff = bsm->getSenderSpeed(); // 取得兩個time slot追蹤車輛的座標差
         Coord following_loc = bsm->getSenderPos();
+        following_loc.x += 10 * MovingDiff.x;
+        following_loc.y += 10 * MovingDiff.y; // 先直接將兩個Time slot的座標差(轉換成秒)當作速度在X軸和Y軸的分量
         following_loc.z = 3;
+        if(Nearest_MEC != -1) // 若UAV有連結MEC，將目的地設定為預測車輛位置與MEC位置的中心點
+        {
+            following_loc.x = (following_loc.x + MEC_Position.x) / 2;
+            following_loc.y = (following_loc.y + MEC_Position.y) / 2;
+        }
         EV << "sp = " << sp << endl;
         UAV_resource.following_speed_1 = sp;
         UAV_resource.following_speed =
                 0.8 * UAV_resource.following_speed_1 + 0.2 * (UAV_resource.following_speed_1 - UAV_resource.following_speed_2) + 1.0;
+        if(UAV_resource.following_speed <= 0) // 避免將speed設置成0 or 負數(因設定成0會導致該mobility消失)
+            UAV_resource.following_speed = 1.0;
         EV << "v-1 = " << UAV_resource.following_speed_1 << " / v-2 = " << UAV_resource.following_speed_2 << " / V = " << UAV_resource.following_speed << endl;
         UAV_resource.following_speed_2 = UAV_resource.following_speed_1;
-        EV << "Change my destination to " << following_loc << ", and my speed is set to " << UAV_resource.following_speed << endl;
+        EV << "UAV " << myId << ": Change my destination to " << following_loc << ", and my speed is set to " << UAV_resource.following_speed << endl;
         auto mobilityModule = check_and_cast<veins::TargetedMobility*>(getParentModule()->getSubmodule("mobility"));
         // 呼叫targetMobility的去更新目的地
         mobilityModule->par("speed").setDoubleValue(UAV_resource.following_speed);
@@ -234,7 +247,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
 {
     if(!strcmp(msg->getName(), "beacon"))
     {
-        if(simTime().dbl() >= (UAV_resource.following_time + 0.5))
+        if((UAV_resource.following) && simTime().dbl() >= (UAV_resource.following_time + 0.5))
         {
             EV << "UAV " << myId << ": I'm loss the follow of car " << UAV_resource.following_car << endl;
             UAV_resource.following = false;
@@ -274,7 +287,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
     {
         LAddress::L2Type num = std::stoi(std::string(msg->getName()).substr(4));
         delete msg;
-        if(simTime().dbl() == MEC_map[num].generate_time + 2.0)
+        if(simTime().dbl() == MEC_map[num].generate_time + 1.0)
         {
             MEC_map.erase(num);
             EV << "UAV " << myId << " : RSU " << num << " is not in my area" << endl;
@@ -282,6 +295,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
             Nearest_MEC = -1;
             Delay_to_MEC = DBL_MAX;
             Distance_to_MEC = -1;
+            MEC_Position = Coord(0,0,0);
             if(!MEC_map.empty())
             {
                 for(std::map<LAddress::L2Type, MEC_MapData>::iterator it = MEC_map.begin(); it != MEC_map.end(); it++)
@@ -291,6 +305,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
                         Delay_to_MEC = (*it).second.Delay_to_MEC;
                         Nearest_MEC = (*it).first;
                         Distance_to_MEC = (*it).second.Distance_to_MEC;
+                        MEC_Position = (*it).second.MEC_Position;
                     }
                 }
             }
@@ -360,7 +375,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
     else if(!strcmp(msg->getName(), "check_resource"))
     {
         EV << "I'm UAV " << myId << " and my remained cpu = " << UAV_resource.remain_cpu << ", remained memory = " << UAV_resource.remain_memory << endl;
-        EV << "The MEC in my Area :";
+        EV << "The MEC in my Area :" << endl;
         for (const auto &pair : MEC_map)
         {
             LAddress::L2Type key = pair.first;

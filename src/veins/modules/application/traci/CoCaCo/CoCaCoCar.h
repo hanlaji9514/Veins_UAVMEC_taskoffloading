@@ -54,8 +54,9 @@ struct car_resource
     LAddress::L2Type followed_car;
     double cal_capability = 500000;
     std::queue<task> pending_tasks; // 待處理之任務(FIFO)
-    std::list<task> handling_tasks; // 正在被處理之任務
-    std::list<task> waiting_tasks; // 傳送出去等待處理完回傳的任務
+    std::list<task> handling_tasks; // 正在被車輛處理之任務
+    std::list<task> waiting_tasks; // 分配完等待處理的任務
+    //std::list<std::pair<task, int>> waiting_tasks; // 分配完等待處理的任務
 
     car_resource (int c, int m)
     {
@@ -84,6 +85,14 @@ public:
     CoCaCoCar();
     void dispatchTask();
     void dispatchTaskConsiderEnergy();
+    void CoCaCoTaskOffloading();
+    LAddress::L2Type Nearest_MEC = -1;
+    double Delay_to_MEC = DBL_MAX;
+    double Distance_to_MEC = -1;
+    double MEC_generate_time;
+    int MEC_remain_cpu;
+    int MEC_remain_mem;
+
 
 protected:
     simtime_t lastDroveAt;

@@ -105,6 +105,11 @@ void CoCaCoCar::onWSM(BaseFrame1609_4* frame)
             }
         }
     }
+    else if(std::string(wsm->getName()).substr(0, 15) == "MECTaskSendBack") // 車輛收到MEC處理完成的任務
+    {
+        int finish_size = wsm->getByteLength();
+        EV << myId << ": Received the finished task from " << wsm->getSenderAddress() << ", and the packet size = " << finish_size << endl;
+    }
 
 }
 
@@ -115,34 +120,65 @@ void CoCaCoCar::onBSM(DemoSafetyMessage* wsm)
 
 void CoCaCoCar::onBM(BeaconMessage* bsm)
 {
-    //BeaconMessage* bm = check_and_cast<BeaconMessage*>(bsm);
-    //findHost()->getDisplayString().setTagArg("i", 1, "blue");
-    EV_INFO << myId << ": I Receive a beacon from UAV " << bsm->getSenderAddress() << " / it's name = " << bsm->getName() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC() << " / Distance to MEC : " << bsm->getDistance_to_MEC() << endl;
-    UAV_map[bsm->getSenderAddress()] = {simTime().dbl(), bsm->getSenderPos(), (simTime() - bsm->getTimestamp()).dbl(), bsm->getDelay_to_MEC(), bsm->getDistance_to_MEC(), bsm->getRemain_cpu(), bsm->getRemain_mem()};
-    if(!node_resource.followed && !bsm->getFollowing())
+    if(!strcmp(bsm->getName(), "MEC_beacon"))
     {
-        EV << myId << ": UAV " << bsm->getSenderAddress() << " want to follow me!" << endl;
-
-        node_resource.tmp_Position = curPosition;
-        node_resource.tmp_time = simTime().dbl();
-        //EV << myId << ": tmp_Position =  " << node_resource.tmp_Position << " / tmp_time = " << node_resource.tmp_time << endl;
-
-        BeaconMessage *bm = new BeaconMessage("FollowMe");
-        populateWSM(bm);
-        bm->setSenderAddress(myId);
-        bm->setByteLength(300);
-        bm->setTimestamp(simTime());
-        bm->setRecipientAddress(bsm->getSenderAddress());
-        bm->setSenderPos(curPosition);
-        sendDown(bm);
+        double tmp_delay = simTime().dbl() - bsm->getTimestamp().dbl();
+        double tmp_distance_x = bsm->getSenderPos().x - curPosition.x;
+        double tmp_distance_y = bsm->getSenderPos().y - curPosition.y;
+        double tmp_distance = sqrt(tmp_distance_x * tmp_distance_x + tmp_distance_y * tmp_distance_y);
+        if(Nearest_MEC == bsm->getSenderAddress()) // 收到同一個MEC的beacon，更新資料
+        {
+            Delay_to_MEC = tmp_delay;
+            Distance_to_MEC = tmp_distance;
+            MEC_generate_time = simTime().dbl();
+            MEC_remain_cpu = bsm->getRemain_cpu();
+            MEC_remain_mem = bsm->getRemain_mem();
+            EV << myId << ": The MEC " << Nearest_MEC << " refresh it's delay!" << endl;
+        }
+        else
+        {
+            if(tmp_delay <= Delay_to_MEC) // 若收到其他MEC的beacon，比較確認哪一個是delay最短的
+            {
+                Nearest_MEC = bsm->getSenderAddress();
+                Delay_to_MEC = tmp_delay;
+                Distance_to_MEC = tmp_distance;
+                MEC_generate_time = simTime().dbl();
+                MEC_remain_cpu = bsm->getRemain_cpu();
+                MEC_remain_mem = bsm->getRemain_mem();
+                EV << myId << ": I find another MEC " << Nearest_MEC << ", and it's delay is less than before!" << endl;
+            }
+        }
+        cMessage *MECTimer = new cMessage("check_MEC_beacon");
+        scheduleAt(simTime() + 0.5, MECTimer);
     }
-    if(!node_resource.followed && !strcmp(bsm->getName(), "FollowMe_ACK"))
+    else
     {
-        node_resource.followed = true;
-        node_resource.followed_car = bsm->getSenderAddress();
-        EV << myId << ": I'm followed by UAV " << bsm->getSenderAddress() << "!" << endl;
-        cMessage *FollowMsg = new cMessage("Follow");
-        scheduleAt(simTime() + 0.05, FollowMsg);
+        EV_INFO << myId << ": I Receive a beacon from UAV " << bsm->getSenderAddress() << " / it's name = " << bsm->getName() << " and it's position : " << bsm->getSenderPos() << " / speed : " << bsm->getSenderSpeed() << " / direction : " << bsm->getSenderDirection() << " / Delay to MEC : " << bsm->getDelay_to_MEC() << " / Distance to MEC : " << bsm->getDistance_to_MEC() << endl;
+        UAV_map[bsm->getSenderAddress()] = {simTime().dbl(), bsm->getSenderPos(), (simTime() - bsm->getTimestamp()).dbl(), bsm->getDelay_to_MEC(), bsm->getDistance_to_MEC(), bsm->getRemain_cpu(), bsm->getRemain_mem()};
+        if(!node_resource.followed && !bsm->getFollowing())
+        {
+            EV << myId << ": UAV " << bsm->getSenderAddress() << " want to follow me!" << endl;
+
+            node_resource.tmp_Position = curPosition;
+            node_resource.tmp_time = simTime().dbl();
+            //EV << myId << ": tmp_Position =  " << node_resource.tmp_Position << " / tmp_time = " << node_resource.tmp_time << endl;
+            BeaconMessage *bm = new BeaconMessage("FollowMe");
+            populateWSM(bm);
+            bm->setSenderAddress(myId);
+            bm->setByteLength(300);
+            bm->setTimestamp(simTime());
+            bm->setRecipientAddress(bsm->getSenderAddress());
+            bm->setSenderPos(curPosition);
+            sendDown(bm);
+        }
+        if(!node_resource.followed && !strcmp(bsm->getName(), "FollowMe_ACK"))
+        {
+            node_resource.followed = true;
+            node_resource.followed_car = bsm->getSenderAddress();
+            EV << myId << ": I'm followed by UAV " << bsm->getSenderAddress() << "!" << endl;
+            cMessage *FollowMsg = new cMessage("Follow");
+            scheduleAt(simTime() + 0.05, FollowMsg);
+        }
     }
 }
 
@@ -151,6 +187,7 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
     if(!strcmp(msg->getName(), "generate_task"))
     {
         int numtasks = intuniform(3,8);
+        TotalPacket += numtasks;
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
@@ -188,7 +225,8 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
             }
             EV << "I'm " << myId << " and I generate a task: QoS = " << node_resource.pending_tasks.back().qos << " , Delay_limit : " << node_resource.pending_tasks.back().delay_limit <<  " , start_time = " << node_resource.pending_tasks.back().start_time << " , expire_time = " << node_resource.pending_tasks.back().expire_time << " , size = " << node_resource.pending_tasks.back().packet_size << endl;
         }
-        dispatchTaskConsiderEnergy();
+        CoCaCoTaskOffloading();
+        //dispatchTaskConsiderEnergy();
         delete msg;
         cMessage *taskMsg = new cMessage("generate_task");
         scheduleAt(simTime() + uniform(0.1 , 2.5), taskMsg);
@@ -253,11 +291,13 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
             }
         }
         if(!node_resource.pending_tasks.empty())
-            dispatchTaskConsiderEnergy();
+            CoCaCoTaskOffloading();
+            //dispatchTaskConsiderEnergy();
     }
     else if(!strcmp(msg->getName(), "Follow"))
     {
         delete msg;
+        // 由兩個time slot車輛的座標差計算車輛的移動速度(mps)
         double sp = sqrt((curPosition.x - node_resource.tmp_Position.x) * (curPosition.x - node_resource.tmp_Position.x)
                        + (curPosition.y - node_resource.tmp_Position.y) * (curPosition.y - node_resource.tmp_Position.y))
                        / (simTime().dbl() - node_resource.tmp_time);
@@ -266,6 +306,7 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
         //EV << "curPosition.y - node_resource.tmp_Position.y = " << (curPosition.y - node_resource.tmp_Position.y) << endl;
         //EV << "node_resource.tmp_time = " << node_resource.tmp_time << endl;
         //EV << "simTime().dbl() = " << simTime().dbl() << endl;
+        Coord MovingDiff = curPosition - node_resource.tmp_Position; // 車輛前一個slot與這一次slot間的移動座標
         node_resource.tmp_Position = curPosition;
         node_resource.tmp_time = simTime().dbl();
         BeaconMessage *bm = new BeaconMessage("KeepFollow");
@@ -276,10 +317,20 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
         bm->setRecipientAddress(node_resource.followed_car);
         bm->setSenderPos(curPosition);
         bm->setCurrentSpeed(sp);
-        //bm->setSenderSpeed(node_resource.cSpeed);
+        bm->setSenderSpeed(MovingDiff);
         sendDown(bm);
         cMessage *FollowMsg = new cMessage("Follow");
         scheduleAt(simTime() + 0.1, FollowMsg);
+    }
+    else if(!strcmp(msg->getName(), "check_MEC_beacon"))
+    {
+        if(MEC_generate_time + 0.5 <= simTime().dbl())
+        {
+            EV << myId << " : The MEC " << Nearest_MEC << " is lost connect!" << endl;
+            Nearest_MEC = -1;
+            Delay_to_MEC = DBL_MAX;
+        }
+        delete msg;
     }
 }
 
@@ -289,6 +340,83 @@ struct ScheduledMessage
     double cal_time;
 };
 
+void CoCaCoCar::CoCaCoTaskOffloading()
+{
+    int loop_time = node_resource.pending_tasks.size();
+    for(int i=0; i<loop_time; i++)
+    {
+        task top_task = node_resource.pending_tasks.front();
+        node_resource.pending_tasks.pop();
+        EV << myId << " : expire time =  " << top_task.expire_time << ", Nearest_MEC = " << Nearest_MEC << endl;
+        if(top_task.expire_time > simTime().dbl())
+        {
+            if(!UAV_map.empty())
+            {
+                double minDelay = std::numeric_limits<double>::max(); // 初始化為最大值
+                LAddress::L2Type minDelayUAV;
+                for(const auto& UAV_in_my_Area : UAV_map)
+                {
+                    if(UAV_in_my_Area.second.Delay < minDelay)
+                    {
+                        minDelay = UAV_in_my_Area.second.Delay;
+                        minDelayUAV = UAV_in_my_Area.first;
+                    }
+                }
+                // 現在，minDelayUAV 是 Delay 最小的 UAV 的地址
+                UAV_MapData minDelayUAV_in_my_Area = UAV_map[minDelayUAV]; // 找到delay最小的UAV
+                if(minDelayUAV_in_my_Area.Delay_to_MEC != -1) // Delay最小的UAV有和MEC連線 => 任務分為車輛、UAV、MEC計算
+                {
+                    // 注意MEC任務傳輸路徑：車輛->UAV->MEC
+                }
+                else // Delay最小的UAV沒有和MEC連線
+                {
+                    if(Nearest_MEC != -1) // UAV沒和MEC連線，車輛自己有和MEC連線 => 任務分為車輛、UAV、MEC計算
+                    {
+                        // 注意MEC任務傳輸路徑：車輛->MEC
+
+                    }
+                    else // UAV沒和MEC連線，車輛自己也沒和MEC連線 => 任務分為車輛和UAV計算
+                    {
+
+                    }
+                }
+            }
+            else
+            {
+                if(Nearest_MEC != -1) // 車輛沒連線UAV、但是有連線MEC => 任務分為車輛和MEC計算
+                {
+
+                }
+                else // 車輛沒連線UAV也沒連線MEC => 車輛自行運算
+                {
+
+                }
+            }
+            /*if(Nearest_MEC != -1)
+            {
+                EV << myId << ": Send a task to MEC " << Nearest_MEC << ", packet size = " << top_task.packet_size << endl;
+                std::string s = "Car_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
+                TraCIDemo11pMessage *task_CartoMEC_msg = new TraCIDemo11pMessage;
+                populateWSM(task_CartoMEC_msg);
+                task_CartoMEC_msg->setByteLength(top_task.packet_size);
+                task_CartoMEC_msg->setSenderAddress(myId);
+                task_CartoMEC_msg->setRecipientAddress(Nearest_MEC);
+                task_CartoMEC_msg->setName(s.c_str());
+                sendDown(task_CartoMEC_msg);
+            }
+            else
+            {
+                node_resource.pending_tasks.push(top_task);
+            }*/
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+/*
 void CoCaCoCar::dispatchTaskConsiderEnergy()
 {
     std::vector<ScheduledMessage> selfscheduledMessages;
@@ -435,7 +563,7 @@ void CoCaCoCar::dispatchTaskConsiderEnergy()
                 }
                 else // 車輛傳給UAV再給MEC運算成本最低
                 {
-                    // candidate_MEC指的是負責relay給MEC的UAV的id(因為要先傳給該該UAV)
+                    // candidate_MEC指的是負責relay給MEC的UAV的id(因為要先傳給該UAV)
                     EV << myId << " : I find UAV " << candidate_MEC << " and it is connecting to a Edge Server!" << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_MEC = " << cost_MEC << endl;
                     std::string s = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
@@ -475,7 +603,7 @@ void CoCaCoCar::dispatchTaskConsiderEnergy()
                     }
                     else // 車輛傳給UAV再給MEC運算成本最低
                     {
-                        // candidate_MEC指的是負責relay給MEC的UAV的id(因為要先傳給該該UAV)
+                        // candidate_MEC指的是負責relay給MEC的UAV的id(因為要先傳給該UAV)
                         EV << myId << " : I find UAV " << candidate_MEC << " and it is connecting to a Edge Server!" << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                         EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_MEC = " << cost_MEC << endl;
                         std::string s = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
@@ -502,6 +630,7 @@ void CoCaCoCar::dispatchTaskConsiderEnergy()
         scheduleAt(simTime() + selfscheduledMessage.cal_time, selfscheduledMessage.msg);
     }
 }
+*/
 
 /*void CoCaCoCar::dispatchTask()
 {
@@ -594,6 +723,7 @@ void CoCaCoCar::finish()
 {
     double TransRate = (SuccessedTime / (SuccessedTime + PacketLossTime));
     double PacketLossRate = (PacketLossTime / (SuccessedTime + PacketLossTime));
+    EV << "Total Packet : " << TotalPacket << endl;
     EV << "Packet loss Time = " << PacketLossTime << endl;
     EV << "Transmission Successes Time = " << SuccessedTime << endl;
     EV << "Transmission Rate = " << TransRate << endl;

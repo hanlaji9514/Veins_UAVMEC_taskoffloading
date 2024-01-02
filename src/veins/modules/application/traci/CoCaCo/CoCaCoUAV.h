@@ -78,6 +78,7 @@ struct MEC_MapData
     double generate_time; // 收到MEC ACK確認連線的時間
     double Delay_to_MEC; // MEC傳送ACK回給UAV所需的Delay
     double Distance_to_MEC; //MEC與UAV之間的距離
+    Coord MEC_Position; // MEC的所在座標
 };
 
 class VEINS_API CoCaCoUAV : public DemoBaseApplLayer {
@@ -90,6 +91,7 @@ public:
     double Delay_to_MEC = DBL_MAX;
     LAddress::L2Type Nearest_MEC = -1;
     double Distance_to_MEC = -1;
+    Coord MEC_Position = Coord(0,0,0);
 
 protected:
     simtime_t lastDroveAt;
