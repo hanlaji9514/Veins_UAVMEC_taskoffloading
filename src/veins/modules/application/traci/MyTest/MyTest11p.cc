@@ -625,7 +625,7 @@ void MyTest11p::finish()
 {
     double TransRate = (SuccessedTime / (SuccessedTime + PacketLossTime));
     double PacketLossRate = (PacketLossTime / (SuccessedTime + PacketLossTime));
-    EV << "Total Packet = " << TotalPacket << endl;
+    EV << "Total Packet : " << TotalPacket << endl;
     EV << "Packet loss Time = " << PacketLossTime << endl;
     EV << "Transmission Successes Time = " << SuccessedTime << endl;
     EV << "Transmission Rate = " << TransRate << endl;
