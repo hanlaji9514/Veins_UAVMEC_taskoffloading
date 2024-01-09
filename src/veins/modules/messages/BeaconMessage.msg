@@ -36,5 +36,7 @@ packet BeaconMessage extends BaseFrame1609_4 {
     int remain_mem;
     double Delay_to_MEC = -1;
     double Distance_to_MEC = -1;
+    bool following = false;
+    double currentSpeed;
     
 }

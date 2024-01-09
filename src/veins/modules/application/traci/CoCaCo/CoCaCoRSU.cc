@@ -66,7 +66,7 @@ void CoCaCoRSU::onWSM(BaseFrame1609_4* frame)
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
 
 
-    //EV_INFO << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
+    //EV << "MEC " << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp() << " And the Name: " << wsm->getName() << " Delay = " << simTime() - wsm->getTimestamp() << endl;
     if(std::string(wsm->getName()).substr(0, 10) == "MEC_handle") // MEC收到UAV轉傳過來的任務請求
     {
         std::string name = wsm->getName();
@@ -83,17 +83,46 @@ void CoCaCoRSU::onWSM(BaseFrame1609_4* frame)
         // 創建一個 task 物件並設定其成員變數
         // seglist[2] 是 require_cpu
         // seglist[3] 是 require_memory
-        // seglist[4] 是 source_id
+        // seglist[4] 是 full packet size
+        // seglist[5] 是 source_id
         task received_t;
-        received_t.source_id = std::stoi(seglist[4]);
+        received_t.source_id = std::stoi(seglist[5]);
         received_t.relay_id = wsm->getSenderAddress();
         received_t.packet_size = wsm->getByteLength();
         received_t.require_cpu = std::stoi(seglist[2]);
         received_t.require_memory = std::stoi(seglist[3]);
+        received_t.full_packet_size = std::stoi(seglist[4]);
         RSU_resource.pending_tasks.push(received_t);
-        EV << "RSU " << myId << ": Received a task from UAV " << wsm->getSenderAddress() << ", and the source car is " << received_t.source_id << endl;
+        EV << "RSU " << myId << ": Received a task from UAV " << wsm->getSenderAddress() << ", and the source car is " << received_t.source_id << " / handle size = " << received_t.packet_size << ", Full packet size = " << received_t.full_packet_size << endl;
         handleReceivedTask();
+    }
+    else if(std::string(wsm->getName()).substr(0, 14) == "Car_MEC_handle") // MEC收到車輛直接傳過來的任務請求
+    {
+        std::string name = wsm->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
 
+        // 使用 '_' 來分割字串
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
+        }
+
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[3] 是 require_cpu
+        // seglist[4] 是 require_memory
+        // seglist[5] 是 full packet size
+        task received_t;
+        received_t.relay_id = -1;
+        received_t.source_id = wsm->getSenderAddress();
+        received_t.packet_size = wsm->getByteLength();
+        received_t.require_cpu = std::stoi(seglist[3]);
+        received_t.require_memory = std::stoi(seglist[4]);
+        received_t.full_packet_size = std::stoi(seglist[5]);
+        RSU_resource.pending_tasks.push(received_t);
+        EV << "RSU " << myId << ": Received a task from Car " << wsm->getSenderAddress() << " / handle size = " << received_t.packet_size << ", Full packet size = " << received_t.full_packet_size << endl;
+        handleReceivedTask();
     }
 }
 
@@ -118,7 +147,7 @@ void CoCaCoRSU::onBM(BeaconMessage* bsm)
 
 void CoCaCoRSU::handleSelfMsg(cMessage* msg)
 {
-    if (std::string(msg->getName()).substr(0, 5) == "Task_") // 任務處理完成，須回傳給轉傳過來的UAV讓他回傳給車輛
+    if (std::string(msg->getName()).substr(0, 5) == "Task_") // 任務處理完成，須回傳給轉傳過來的UAV讓他回傳給車輛或是直接回傳給車輛
     {
         std::string name = msg->getName();
         std::stringstream ss(name);
@@ -137,15 +166,24 @@ void CoCaCoRSU::handleSelfMsg(cMessage* msg)
             {
                 RSU_resource.remain_cpu += it->require_cpu;
                 RSU_resource.remain_memory += it->require_memory;
-                std::string s = "MECTaskSendBack_" + std::to_string(it->packet_size);
+                std::string s = "MECTaskSendBack_" + std::to_string(it->full_packet_size);
                 TraCIDemo11pMessage *SendBack = new TraCIDemo11pMessage;
                 populateWSM(SendBack);
                 SendBack->setByteLength(it->packet_size);
                 SendBack->setSenderAddress(myId);
-                SendBack->setRecipientAddress(it->relay_id);
                 SendBack->setName(s.c_str());
+                if(it->relay_id == -1) // 代表這個task是由車輛直接送來的
+                {
+                    SendBack->setRecipientAddress(it->source_id);
+                    EV << "RSU " << myId << ": Handling finish. Full Packet Size = " << it->full_packet_size << " / Handle Size = " << finish_size << ", send back to Car " << it->source_id << endl;
+                }
+                else // relay_id有value，代表這個task是由UAV轉傳過來的
+                {
+                    SendBack->setRecipientAddress(it->relay_id);
+                    EV << "RSU " << myId << ": Handling finish. Full Packet Size = " << it->full_packet_size << " / Handle Size = " << finish_size << ", send back to UAV " << it->relay_id << ", and Relay back to " << it->source_id << endl;
+                }
                 sendDown(SendBack);
-                EV << "RSU " << myId << ": Handling finish. Size = " << finish_size << ", send back to UAV " << it->relay_id << ", and Relay back to " << it->source_id << endl;
+
                 it = RSU_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
@@ -163,6 +201,24 @@ void CoCaCoRSU::handleSelfMsg(cMessage* msg)
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }
+    else if(!strcmp(msg->getName(), "beacon"))
+    {
+        BeaconMessage *bsm = new BeaconMessage("MEC_beacon");
+        // populate some common properties with the BaseWaveApplLayer method
+        populateWSM(bsm);
+        bsm->setSenderAddress(myId);
+        // set the sender position with the mobility module position
+        bsm->setSenderPos(curPosition);
+        // set the speed with the mobility module speed
+        // send the BSM to the MAC layer immediately
+        bsm->setByteLength(300); //beacon message 大約為300Bytes
+        bsm->setTimestamp(simTime());
+        bsm->setRemain_cpu(RSU_resource.remain_cpu);
+        bsm->setRemain_mem(RSU_resource.remain_memory);
+        sendDown(bsm);
+        cMessage *beaconTimer = new cMessage("beacon");
+        scheduleAt(simTime() + 0.1, beaconTimer);
+    }
     delete msg;
 }
 
@@ -179,7 +235,7 @@ void CoCaCoRSU::handleReceivedTask()
             RSU_resource.remain_cpu -= top_task.require_cpu;
             RSU_resource.remain_memory -= top_task.require_memory;
             std::string s = "Task_" + std::to_string(top_task.source_id) + "_" + std::to_string(top_task.packet_size);
-            EV << "RSU " << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << RSU_resource.remain_cpu << " remain memory = " << RSU_resource.remain_memory << endl;
+            EV << "RSU " << myId << ": handling the task! Handling time = " << cal_time << " / handle size = " << top_task.packet_size << " / full packet size = " << top_task.full_packet_size << " / remain cpu = " << RSU_resource.remain_cpu << " remain memory = " << RSU_resource.remain_memory << endl;
             RSU_resource.handling_tasks.push_back(top_task);
             cMessage *Task_handlingTimer = new cMessage(s.c_str());
             scheduleAt(simTime() + cal_time, Task_handlingTimer);

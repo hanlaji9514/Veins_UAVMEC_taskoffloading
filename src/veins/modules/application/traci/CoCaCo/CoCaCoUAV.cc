@@ -43,6 +43,8 @@ void CoCaCoUAV::initialize(int stage)
         lastDroveAt = simTime();
         currentSubscribedServiceId = -1;
 
+        UAV_resource.following = false;
+
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
         cMessage *beaconTimer = new cMessage("beacon");
@@ -67,10 +69,9 @@ void CoCaCoUAV::onWSA(DemoServiceAdvertisment* wsa)
 void CoCaCoUAV::onWSM(BaseFrame1609_4* frame)
 {
     TraCIDemo11pMessage* wsm = check_and_cast<TraCIDemo11pMessage*>(frame);
-    //EV << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << wsm->getTimestamp()/* << " And the data: " << wsm->getDemoData() */<< " Delay = " << simTime() - wsm->getTimestamp();
+    EV << "UAV " << myId << ": Receive a packet from: " << wsm->getSenderAddress() << " at time: " << simTime().dbl() << " And the Name: " << wsm->getName() << " Delay = " << simTime() - wsm->getTimestamp() << endl;
     if(std::string(wsm->getName()).substr(0, 10) == "UAV_handle") // 車輛傳送給UAV的任務請求
     {
-        EV << "UAV " << myId << ": Handling the task from " << wsm->getSenderAddress() << " and the packet size = " << wsm->getByteLength() << endl;
         std::string name = wsm->getName();
         std::stringstream ss(name);
         std::string segment;
@@ -84,17 +85,19 @@ void CoCaCoUAV::onWSM(BaseFrame1609_4* frame)
         // 創建一個 task 物件並設定其成員變數
         // seglist[2] 是 require_cpu
         // seglist[3] 是 require_memory
+        // seglist[4] 是 full packet size
         task received_t;
         received_t.id = wsm->getSenderAddress();
         received_t.packet_size = wsm->getByteLength();
         received_t.require_cpu = std::stoi(seglist[2]);
         received_t.require_memory = std::stoi(seglist[3]);
+        received_t.full_packet_size = std::stoi(seglist[4]);
         UAV_resource.received_tasks.push(received_t);
+        EV << "UAV " << myId << ": received the task request from " << wsm->getSenderAddress() << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() << endl;
         handleReceivedTask();
     }
-    else if(std::string(wsm->getName()).substr(0, 14) == "UAV_MEC_handle") // 車輛傳送給UAV要求轉傳給MEC的任務請求
+    else if(std::string(wsm->getName()).substr(0, 14) == "UAV_MEC_handle") // 車輛傳送給UAV要求轉傳給MEC(1/3)，以及UAV自己算(1/3)的任務請求
     {
-        EV << "UAV " << myId << ": Relaying the task from " << wsm->getSenderAddress() << " to " << Nearest_MEC << ", and the packet size = " << wsm->getByteLength() << endl;
 
         std::string name = wsm->getName();
         std::stringstream ss(name);
@@ -108,55 +111,60 @@ void CoCaCoUAV::onWSM(BaseFrame1609_4* frame)
         // 創建一個 task 物件並設定其成員變數
         // seglist[3] 是 require_cpu
         // seglist[4] 是 require_memory
+        // seglist[5] 是 full packet size
         task received_t;
         received_t.id = wsm->getSenderAddress();
-        received_t.packet_size = wsm->getByteLength();
+        received_t.packet_size = wsm->getByteLength() / 2;
         received_t.require_cpu = std::stoi(seglist[3]);
         received_t.require_memory = std::stoi(seglist[4]);
+        received_t.full_packet_size = std::stoi(seglist[5]);
+        UAV_resource.received_tasks.push(received_t);
         UAV_resource.waiting_tasks.push_back(received_t);
+
+        EV << "UAV " << myId << ": received the task request from " << wsm->getSenderAddress() << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() / 2 << endl;
+        EV << "UAV " << myId << ": Relaying the task from car " << wsm->getSenderAddress() << " to MEC " << Nearest_MEC << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() / 2 << endl;
 
         std::string s = std::string(wsm->getName()).substr(4) + "_" + std::to_string(wsm->getSenderAddress());
         TraCIDemo11pMessage *SendtoMEC = new TraCIDemo11pMessage;
         populateWSM(SendtoMEC);
-        SendtoMEC->setByteLength(wsm->getByteLength());
+        SendtoMEC->setByteLength(received_t.packet_size);
         SendtoMEC->setSenderAddress(myId);
         SendtoMEC->setRecipientAddress(Nearest_MEC);
         SendtoMEC->setName(s.c_str());
         sendDown(SendtoMEC);
 
+        handleReceivedTask();
+
     }
     else if(std::string(wsm->getName()).substr(0, 15) == "MECTaskSendBack") // UAV收到MEC處理完成的任務，要轉傳回給車輛
     {
-        int finish_size = wsm->getByteLength();
-        EV << "UAV " << myId << ": Received the finished task from " << wsm->getSenderAddress() << ", and the packet size = " << finish_size << endl;
-        for (auto it = UAV_resource.waiting_tasks.begin(); it != UAV_resource.waiting_tasks.end();)
+        int Back_FullPacketSize = std::stoi(std::string(wsm->getName()).substr(16));
+        EV << myId << ": Received the finished task from MEC " << wsm->getSenderAddress() << ", and need to send back to the car, the Full packet size = " << Back_FullPacketSize << endl;
+        for(auto it = UAV_resource.waiting_tasks.begin(); it != UAV_resource.waiting_tasks.end();)
         {
-            EV << "!packet_size = " << it->packet_size << " And the finish_size = " << finish_size << endl;
-            if (it->packet_size == finish_size)
+            EV << "waiting task full size = " << it->full_packet_size << " / back full packet size = " << Back_FullPacketSize << endl;
+            if (it->full_packet_size == Back_FullPacketSize)
             {
-                std::string s = "TaskSendBack_" + std::to_string(it->packet_size);
+                std::string s = "MEC_UAV_TaskSendBack_" + std::to_string(it->full_packet_size);
                 TraCIDemo11pMessage *SendBacktoNode = new TraCIDemo11pMessage;
                 populateWSM(SendBacktoNode);
-                SendBacktoNode->setByteLength(it->packet_size);
+                SendBacktoNode->setByteLength(wsm->getByteLength());
                 SendBacktoNode->setSenderAddress(myId);
                 SendBacktoNode->setRecipientAddress(it->id);
                 SendBacktoNode->setName(s.c_str());
                 sendDown(SendBacktoNode);
-                EV << "UAV " << myId << ": Send Back! Size = " << finish_size << ", send back to car " << it->id << endl;
+                EV << "UAV " << myId << ": Send Back! handle size = " << wsm->getByteLength() << ", full packet size = " << it->full_packet_size << ", send back to car " << it->id << endl;
                 it = UAV_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
                 break;
             }
-            else
-            {
-                ++it;  // 如果當前元素不符合條件，則遞增迭代器
-            }
+            ++it;  // 如果當前元素不符合條件，則遞增迭代器
         }
     }
 }
 
 void CoCaCoUAV::onBM(BeaconMessage* bsm)
 {
-    if(bsm->getBeaconType() == 2)//收到MEC ACK
+    if(!strcmp(bsm->getName(), "UAV_beacon_RSUACK"))//收到MEC ACK
     {
         double d = (simTime() - bsm->getTimestamp()).dbl();
         double dx = bsm->getSenderPos().x - curPosition.x;
@@ -168,12 +176,14 @@ void CoCaCoUAV::onBM(BeaconMessage* bsm)
             Delay_to_MEC = d;
             Nearest_MEC = bsm->getSenderAddress();
             Distance_to_MEC = distance;
+            MEC_Position = bsm->getSenderPos();
         }
         else if(d > Delay_to_MEC && Nearest_MEC == bsm->getSenderAddress())// 這個MEC是上次Delay最低的MEC，但是這次的Delay比較高，需要檢查他是否仍是所有MEC裡面Delay最低的，若不是就將其取代
         {
             Delay_to_MEC = d;
             Nearest_MEC = bsm->getSenderAddress();// 先寫進去，若他不是delay最低的就會被蓋掉，若是也已經寫進去了
             Distance_to_MEC = distance;
+            MEC_Position = bsm->getSenderPos();
             for(std::map<LAddress::L2Type, MEC_MapData>::iterator it = MEC_map.begin(); it != MEC_map.end(); it++)
             {
                 if((*it).second.Delay_to_MEC < Delay_to_MEC)
@@ -181,20 +191,74 @@ void CoCaCoUAV::onBM(BeaconMessage* bsm)
                     Delay_to_MEC = (*it).second.Delay_to_MEC;
                     Nearest_MEC = (*it).first;
                     Distance_to_MEC = (*it).second.Distance_to_MEC;
+                    MEC_Position = (*it).second.MEC_Position;
                 }
             }
         }
         EV << "UAV " << myId << " : add RSU " << bsm->getSenderAddress() << " in my area, delay = " << simTime().dbl() - bsm->getTimestamp() << endl;
         std::string s = "MEC_" + std::to_string(bsm->getSenderAddress());
         cMessage *MECMsg = new cMessage(s.c_str());
-        scheduleAt(simTime() + 2.0, MECMsg);
+        scheduleAt(simTime() + 1.0, MECMsg);
     }
+    else if(!UAV_resource.following && !strcmp(bsm->getName(), "FollowMe"))
+    {
+       UAV_resource.following_car = bsm->getSenderAddress();
+       UAV_resource.following = true;
+       UAV_resource.following_time = simTime().dbl();
+       EV << "UAV " << myId << ": I'm following the car " << UAV_resource.following_car << "!" << endl;
+       double sp = bsm->getCurrentSpeed();
+       UAV_resource.following_speed_2 = sp; // 跟隨車輛速度
+       BeaconMessage *bm = new BeaconMessage("FollowMe_ACK");
+       populateWSM(bm);
+       bm->setSenderAddress(myId);
+       bm->setByteLength(300);
+       bm->setTimestamp(simTime());
+       bm->setRecipientAddress(UAV_resource.following_car);
+       bm->setSenderPos(curPosition);
+       bm->setFollowing(UAV_resource.following);
+       sendDown(bm);
+    }
+    else if(!strcmp(bsm->getName(), "KeepFollow"))
+    {
+        UAV_resource.following_time = simTime().dbl();
+        double sp = bsm->getCurrentSpeed();
+        Coord MovingDiff = bsm->getSenderSpeed(); // 取得兩個time slot追蹤車輛的座標差
+        Coord following_loc = bsm->getSenderPos();
+        following_loc.x += 10 * MovingDiff.x;
+        following_loc.y += 10 * MovingDiff.y; // 先直接將兩個Time slot的座標差(轉換成秒)當作速度在X軸和Y軸的分量
+        following_loc.z = 3;
+        if(Nearest_MEC != -1) // 若UAV有連結MEC，將目的地設定為預測車輛位置與MEC位置的中心點
+        {
+            following_loc.x = (following_loc.x + MEC_Position.x) / 2;
+            following_loc.y = (following_loc.y + MEC_Position.y) / 2;
+        }
+        EV << "sp = " << sp << endl;
+        UAV_resource.following_speed_1 = sp;
+        UAV_resource.following_speed =
+                0.8 * UAV_resource.following_speed_1 + 0.2 * (UAV_resource.following_speed_1 - UAV_resource.following_speed_2) + 1.0;
+        if(UAV_resource.following_speed <= 0) // 避免將speed設置成0 or 負數(因設定成0會導致該mobility消失)
+            UAV_resource.following_speed = 1.0;
+        EV << "v-1 = " << UAV_resource.following_speed_1 << " / v-2 = " << UAV_resource.following_speed_2 << " / V = " << UAV_resource.following_speed << endl;
+        UAV_resource.following_speed_2 = UAV_resource.following_speed_1;
+        EV << "Nearest MEC = " << Nearest_MEC << " / MEC position = " << MEC_Position << endl;
+        EV << "UAV " << myId << ": Change my destination to " << following_loc << ", and my speed is set to " << UAV_resource.following_speed << endl;
+        auto mobilityModule = check_and_cast<veins::TargetedMobility*>(getParentModule()->getSubmodule("mobility"));
+        // 呼叫targetMobility的去更新目的地
+        mobilityModule->par("speed").setDoubleValue(UAV_resource.following_speed);
+        mobilityModule->updateDestination(following_loc);
+    }
+
 }
 
 void CoCaCoUAV::handleSelfMsg(cMessage* msg)
 {
     if(!strcmp(msg->getName(), "beacon"))
     {
+        if((UAV_resource.following) && simTime().dbl() >= (UAV_resource.following_time + 0.5))
+        {
+            EV << "UAV " << myId << ": I'm loss the follow of car " << UAV_resource.following_car << endl;
+            UAV_resource.following = false;
+        }
         BeaconMessage *bsm = new BeaconMessage("UAV_beacon");
         // populate some common properties with the BaseWaveApplLayer method
         populateWSM(bsm);
@@ -208,6 +272,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
         // send the BSM to the MAC layer immediately
         bsm->setByteLength(300); //beacon message 大約為300Bytes
         bsm->setTimestamp(simTime());
+        bsm->setFollowing(UAV_resource.following);
         if(Nearest_MEC != -1)
         {
             bsm->setDelay_to_MEC(Delay_to_MEC);
@@ -229,7 +294,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
     {
         LAddress::L2Type num = std::stoi(std::string(msg->getName()).substr(4));
         delete msg;
-        if(simTime().dbl() == MEC_map[num].generate_time + 2.0)
+        if(simTime().dbl() == MEC_map[num].generate_time + 1.0)
         {
             MEC_map.erase(num);
             EV << "UAV " << myId << " : RSU " << num << " is not in my area" << endl;
@@ -237,6 +302,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
             Nearest_MEC = -1;
             Delay_to_MEC = DBL_MAX;
             Distance_to_MEC = -1;
+            MEC_Position = Coord(0,0,0);
             if(!MEC_map.empty())
             {
                 for(std::map<LAddress::L2Type, MEC_MapData>::iterator it = MEC_map.begin(); it != MEC_map.end(); it++)
@@ -246,6 +312,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
                         Delay_to_MEC = (*it).second.Delay_to_MEC;
                         Nearest_MEC = (*it).first;
                         Distance_to_MEC = (*it).second.Distance_to_MEC;
+                        MEC_Position = (*it).second.MEC_Position;
                     }
                 }
             }
@@ -271,16 +338,16 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
             {
                 UAV_resource.remain_cpu += it->require_cpu;
                 UAV_resource.remain_memory += it->require_memory;
-                std::string s = "TaskSendBack_" + std::to_string(it->packet_size);
+                std::string s = "TaskSendBack_" + std::to_string(it->full_packet_size);
                 TraCIDemo11pMessage *SendBack = new TraCIDemo11pMessage;
                 populateWSM(SendBack);
-                SendBack->setByteLength(it->packet_size);
+                SendBack->setByteLength(it->full_packet_size);
                 SendBack->setSenderAddress(myId);
                 SendBack->setRecipientAddress(it->id);
                 SendBack->setName(s.c_str());
                 sendDown(SendBack);
+                EV << "UAV " << myId << ": Handling finish. Handle Size = " << finish_size << ", full packet size = " << it->full_packet_size << ", send back to car " << finish_id << endl;
                 it = UAV_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
-                EV << "UAV " << myId << ": Handling finish. Size = " << finish_size << ", send back to car " << finish_id << endl;
 
                 BeaconMessage *bsm = new BeaconMessage("UAV_beacon"); // 更新目前的狀態給其他車輛知道
                 // populate some common properties with the BaseWaveApplLayer method
@@ -315,7 +382,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
     else if(!strcmp(msg->getName(), "check_resource"))
     {
         EV << "I'm UAV " << myId << " and my remained cpu = " << UAV_resource.remain_cpu << ", remained memory = " << UAV_resource.remain_memory << endl;
-        EV << "The MEC in my Area :";
+        EV << "The MEC in my Area :" << endl;
         for (const auto &pair : MEC_map)
         {
             LAddress::L2Type key = pair.first;
@@ -340,7 +407,7 @@ void CoCaCoUAV::handleReceivedTask()
             UAV_resource.remain_cpu -= top_task.require_cpu;
             UAV_resource.remain_memory -= top_task.require_memory;
             std::string s = "Task_" + std::to_string(top_task.id) + "_" + std::to_string(top_task.packet_size);
-            EV << "UAV " << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << UAV_resource.remain_cpu << " remain memory = " << UAV_resource.remain_memory << endl;
+            EV << "UAV " << myId << ": handling the task! Handling time = " << cal_time << " / handle size = " << top_task.packet_size << " / Full packet size = " << top_task.full_packet_size << " / remain cpu = " << UAV_resource.remain_cpu << " remain memory = " << UAV_resource.remain_memory << endl;
             UAV_resource.handling_tasks.push_back(top_task);
             cMessage *Task_handlingTimer = new cMessage(s.c_str());
             scheduleAt(simTime() + cal_time, Task_handlingTimer);
