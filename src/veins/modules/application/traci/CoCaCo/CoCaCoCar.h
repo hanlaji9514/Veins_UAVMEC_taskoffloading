@@ -55,8 +55,11 @@ struct car_resource
     double cal_capability = 500000;
     std::queue<task> pending_tasks; // 待處理之任務(FIFO)
     std::list<task> handling_tasks; // 正在被車輛處理之任務
-    std::list<task> waiting_tasks; // 分配完等待處理的任務
-    //std::list<std::pair<task, int>> waiting_tasks; // 分配完等待處理的任務
+    //std::list<task> waiting_tasks; // 分配完等待處理的任務
+    std::list<std::pair<task, int>> waiting_tasks; // 分配完等待處理的任務
+    // 已經分配自己運算，但是因運算資源不足而等待的任務
+    //後面的int代表需要運算的大小(與packet size不同，因任務分成多個部分分開計算，若int與packet size相同代表任務完全由自己來運算)
+    std::queue<std::pair<task, int>> queuing_tasks;
 
     car_resource (int c, int m)
     {
@@ -86,6 +89,8 @@ public:
     void dispatchTask();
     void dispatchTaskConsiderEnergy();
     void CoCaCoTaskOffloading();
+    void handleQueuingTask();
+    void clearExpiredTask();
     LAddress::L2Type Nearest_MEC = -1;
     double Delay_to_MEC = DBL_MAX;
     double Distance_to_MEC = -1;
