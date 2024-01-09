@@ -32,6 +32,7 @@
 
 using namespace veins;
 
+int TotalPacket = 0;
 double PacketLossTime = 0;
 double SuccessedTime = 0;
 double UAV_cal_capability = 1000000;
@@ -206,6 +207,7 @@ void MyTest11p::handleSelfMsg(cMessage* msg)
     if(!strcmp(msg->getName(), "generate_task"))
     {
         int numtasks = intuniform(3,8);
+        TotalPacket += numtasks;
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
@@ -623,6 +625,7 @@ void MyTest11p::finish()
 {
     double TransRate = (SuccessedTime / (SuccessedTime + PacketLossTime));
     double PacketLossRate = (PacketLossTime / (SuccessedTime + PacketLossTime));
+    EV << "Total Packet = " << TotalPacket << endl;
     EV << "Packet loss Time = " << PacketLossTime << endl;
     EV << "Transmission Successes Time = " << SuccessedTime << endl;
     EV << "Transmission Rate = " << TransRate << endl;

@@ -76,7 +76,7 @@ void TargetedMobility::makeMove()
         // We have reached the destination
         stepTarget = destination;
         //move.setSpeed(0);
-        move.setStart(stepTarget, simTime()); // �NUAV�y�ЩT�w�b�ت��a
+        move.setStart(stepTarget, simTime()); // 能夠抵達目的地，直接移至目的地
     }
     else
     {
