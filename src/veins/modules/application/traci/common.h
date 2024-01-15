@@ -11,6 +11,7 @@
 using namespace veins;
 
 // 宣告全域變數
+extern int TotalPacket;
 extern double PacketLossTime;
 extern double SuccessedTime;
 extern double UAV_cal_capability;
