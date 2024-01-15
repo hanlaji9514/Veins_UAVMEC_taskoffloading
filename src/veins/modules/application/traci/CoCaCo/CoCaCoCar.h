@@ -43,16 +43,25 @@ namespace veins {
  *
  */
 
-struct resource
+struct car_resource
 {
     int remain_cpu;
     int remain_memory;
+    bool followed;
+    double tmp_time;
+    Coord tmp_Position;
+    Coord cSpeed;
+    LAddress::L2Type followed_car;
     double cal_capability = 500000;
     std::queue<task> pending_tasks; // 待處理之任務(FIFO)
-    std::list<task> handling_tasks; // 正在被處理之任務
-    std::list<task> waiting_tasks; // 傳送出去等待處理完回傳的任務
+    std::list<task> handling_tasks; // 正在被車輛處理之任務
+    //std::list<task> waiting_tasks; // 分配完等待處理的任務
+    std::list<std::pair<task, int>> waiting_tasks; // 分配完等待處理的任務
+    // 已經分配自己運算，但是因運算資源不足而等待的任務
+    //後面的int代表需要運算的大小(與packet size不同，因任務分成多個部分分開計算，若int與packet size相同代表任務完全由自己來運算)
+    std::queue<std::pair<task, int>> queuing_tasks;
 
-    resource (int c, int m)
+    car_resource (int c, int m)
     {
         remain_cpu = c;
         remain_memory = m;
@@ -74,11 +83,21 @@ struct UAV_MapData
 class VEINS_API CoCaCoCar : public DemoBaseApplLayer {
 public:
     void initialize(int stage) override;
-    resource node_resource;
+    car_resource node_resource;
     std::map<LAddress::L2Type, UAV_MapData> UAV_map;
     CoCaCoCar();
     void dispatchTask();
     void dispatchTaskConsiderEnergy();
+    void CoCaCoTaskOffloading();
+    void handleQueuingTask();
+    void clearExpiredTask();
+    LAddress::L2Type Nearest_MEC = -1;
+    double Delay_to_MEC = DBL_MAX;
+    double Distance_to_MEC = -1;
+    double MEC_generate_time;
+    int MEC_remain_cpu;
+    int MEC_remain_mem;
+
 
 protected:
     simtime_t lastDroveAt;

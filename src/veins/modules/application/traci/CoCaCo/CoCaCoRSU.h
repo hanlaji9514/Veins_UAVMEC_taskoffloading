@@ -50,6 +50,7 @@ struct task
     int require_cpu;
     int require_memory;
     int packet_size;
+    int full_packet_size;
 };
 
 struct resource
