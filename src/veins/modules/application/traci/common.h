@@ -2,11 +2,13 @@
 #define COMMON_H
 
 #include "veins/modules/application/ieee80211p/DemoBaseApplLayer.h"
+#include "veins/modules/mobility/TargetedMobility.h"
 #include "veins/modules/messages/BeaconMessage_m.h"
 #include <queue>
 #include <math.h>
 #include <random>
 #include <ctime>
+#include <unordered_map>
 
 using namespace veins;
 
@@ -17,7 +19,16 @@ extern double SuccessedTime;
 extern double UAV_cal_capability;
 extern double MEC_cal_capability;
 
+extern std::unordered_map<LAddress::L2Type, Coord> Car_map;
+extern std::unordered_map<LAddress::L2Type, Coord> UAV_map;
+
 extern std::mt19937 rnd_generator;
+
+struct coord
+{
+    double x;
+    double y;
+};
 
 // 宣告LAB_par(實驗參數)結構體
 struct LAB_par
