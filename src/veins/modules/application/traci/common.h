@@ -21,13 +21,16 @@ extern double MEC_cal_capability;
 
 extern std::unordered_map<LAddress::L2Type, Coord> Car_map;
 extern std::unordered_map<LAddress::L2Type, Coord> UAV_map;
+extern std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
 
 extern std::mt19937 rnd_generator;
 
-struct coord
+struct Cluster
 {
-    double x;
-    double y;
+    std::vector<LAddress::L2Type> CarInCluster;
+    Coord centroid;
+    double max_distance;
+    bool tmp_MergeOrNot;
 };
 
 // 宣告LAB_par(實驗參數)結構體

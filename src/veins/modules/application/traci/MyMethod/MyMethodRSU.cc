@@ -34,6 +34,9 @@ using namespace veins;
 
 std::unordered_map<LAddress::L2Type, Coord> Car_map;
 std::unordered_map<LAddress::L2Type, Coord> UAV_map;
+std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
+std::vector<Cluster> all_clusters;
+std::vector<cOvalFigure*> all_circles;
 
 Define_Module(veins::MyMethodRSU);
 
@@ -44,7 +47,15 @@ void MyMethodRSU::initialize(int stage)
         sentMessage = false;
         lastDroveAt = simTime();
         currentSubscribedServiceId = -1;
-
+        canvas = getParentModule()->getCanvas();
+        if (canvas)
+        {
+            EV << "Canvas is OK." << endl;
+        }
+        else
+        {
+            EV << "Canvas is not available." << endl;
+        }
         cMessage *checkcarMsg = new cMessage("check_car");
         scheduleAt(simTime() + 0.5, checkcarMsg);
         cMessage *beaconTimer = new cMessage("beacon");
@@ -216,6 +227,27 @@ void MyMethodRSU::handleSelfMsg(cMessage* msg)
             Coord coord = uav.second;
             EV << "UAV ID : " << id << ", Coord : (" << coord.x << ", " << coord.y << ")" << endl;
         }
+        all_clusters = agglomerative_clustering(Car_map, 400);
+        for(auto &cluster : all_clusters)
+        {
+            cluster.centroid = calculate_centroid(cluster);
+            EV << "Car In Cluster --> centroid = " << cluster.centroid << ": ";
+            // 建立一個 cOvalFigure 物件
+            cOvalFigure *circle = new cOvalFigure("circle");
+            // 設定圓形的位置和大小，參數為 (左上角 x 座標, 左上角 y 座標, 寬度, 高度)
+            circle->setBounds(cFigure::Rectangle(cluster.centroid.x, cluster.centroid.y, 200, 200));
+            circle->setLineWidth(10);
+            // 設定圓形的顏色，參數為 cFigure::Color 物件，可以使用 RGB 值或預定義的顏色名稱
+            circle->setLineColor(cFigure::RED);
+            // 將圓形加入到地圖上，參數為地圖的指標
+            canvas->addFigure(circle);
+            all_circles.push_back(circle);
+            for(const auto car : cluster.CarInCluster)
+            {
+                EV << car << " ";
+            }
+            EV << endl;
+        }
         cMessage *checkcarMsg = new cMessage("check_car");
         scheduleAt(simTime() + 0.5, checkcarMsg);
     }
@@ -263,6 +295,129 @@ void MyMethodRSU::handleReceivedTask()
             RSU_resource.pending_tasks.push(top_task);
         }
     }
+}
+
+std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LAddress::L2Type, Coord> Car_map, double threshold)
+{
+    std::vector<Cluster> clusters;
+    for(const auto &p : Car_map) // 初始化每一個車輛都是一個獨立的cluster
+    {
+        Cluster c;
+        c.CarInCluster.push_back(p.first);
+        c.tmp_MergeOrNot = false;
+        clusters.push_back(c);
+    }
+    // 重複直到沒有可以合併的cluster
+    bool merged = true;
+    while(merged)
+    {
+        merged = false;
+        for(auto &c : clusters) // 每一輪先將cluster是否已經合併重製成false
+            c.tmp_MergeOrNot = false;
+        // 建立一個新的簇的列表
+        std::vector<Cluster> new_clusters;
+        for(int i=0; i<clusters.size(); i++)
+        {
+            if(clusters[i].tmp_MergeOrNot)
+                continue;
+            // 設定一個變數來記錄最小的最大距離
+            double min_max_distance = DBL_MAX;
+            // 設定一個變數來記錄最小的最大距離對應的簇的索引值
+            double min_max_index = -1;
+            for(int j=i+1; j<clusters.size(); j++)
+            {
+                if(clusters[j].tmp_MergeOrNot)
+                    continue;
+                // 計算兩個簇之間的最大距離
+                double distance = complete_linkage(clusters[i], clusters[j]);
+                // 如果最大距離小於最小的最大距離，則更新最小的最大距離和最小的最大距離對應的簇的索引值
+                if (distance < min_max_distance)
+                {
+                    min_max_distance = distance;
+                    min_max_index = j;
+                }
+            }
+            // 如果最小的最大距離小於閾值，則合併這兩個簇
+            if (min_max_distance < threshold)
+            {
+                // 將要合併的這兩個cluster標記為已合併
+                clusters[i].tmp_MergeOrNot = true;
+                clusters[min_max_index].tmp_MergeOrNot = true;
+
+                // 合併這兩個簇並加入新的簇的列表
+                Cluster merged_cluster = merge_clusters(clusters[i], clusters[min_max_index]);
+                new_clusters.push_back(merged_cluster);
+
+                // 將已經合併的簇從舊的簇的列表中移除
+                clusters.erase(clusters.begin() + min_max_index);
+                clusters.erase(clusters.begin() + i);
+
+                // 更新迴圈的索引值
+                i--;
+                min_max_index--;
+
+                // 設定合併的標記為 true
+                merged = true;
+
+                // 繼續執行內層迴圈
+                continue;
+            }
+            if (!clusters[i].tmp_MergeOrNot)
+            {
+                new_clusters.push_back(clusters[i]);
+            }
+        }
+        clusters = new_clusters;
+    }
+    return clusters;
+}
+
+// 一個函式，用來計算兩個cluster之間的全連結距離
+double MyMethodRSU::complete_linkage(Cluster& c1, Cluster& c2)
+{
+    double max_distance = 0;
+    for (const LAddress::L2Type& p1 : c1.CarInCluster)
+    {
+        for (const LAddress::L2Type& p2 : c2.CarInCluster)
+        {
+            double distance = euclidean_distance(Car_map[p1], Car_map[p2]);
+            if (distance > max_distance)
+            {
+                max_distance = distance;
+            }
+        }
+    }
+    return max_distance;
+}
+
+Cluster MyMethodRSU::merge_clusters(Cluster& c1, Cluster& c2)
+{
+    Cluster c;
+    c.CarInCluster.insert(c.CarInCluster.end(), c1.CarInCluster.begin(), c1.CarInCluster.end());
+    c.CarInCluster.insert(c.CarInCluster.end(), c2.CarInCluster.begin(), c2.CarInCluster.end());
+    return c;
+}
+
+double MyMethodRSU::euclidean_distance(Coord &p1, Coord &p2)
+{
+    return sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2));
+}
+
+Coord MyMethodRSU::calculate_centroid(const Cluster& c)
+{
+    Coord cen;
+    double x_sum = 0;
+    double y_sum = 0;
+    for (const LAddress::L2Type& id : c.CarInCluster)
+    {
+        // 從 Car_map 中查找車輛的座標
+        Coord p = Car_map.at(id);
+        x_sum += p.x;
+        y_sum += p.y;
+    }
+    cen.x = x_sum / c.CarInCluster.size();
+    cen.y = y_sum / c.CarInCluster.size();
+    return cen;
 }
 
 void MyMethodRSU::handlePositionUpdate(cObject* obj)

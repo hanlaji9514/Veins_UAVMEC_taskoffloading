@@ -24,6 +24,7 @@
 #pragma once
 
 #include "veins/modules/application/ieee80211p/DemoBaseApplLayer.h"
+#include "veins/modules/application/traci/common.h" // 所有全域變數宣告在common.h中，並在MyTest11p.cc中定義
 #include <queue>
 #include <math.h>
 
@@ -74,6 +75,11 @@ public:
     MyMethodRSU();
     resource RSU_resource;
     void handleReceivedTask();
+    double euclidean_distance(Coord&, Coord&);
+    Cluster merge_clusters(Cluster&, Cluster&);
+    std::vector<Cluster> agglomerative_clustering(std::unordered_map<LAddress::L2Type, Coord>, double);
+    double complete_linkage(Cluster&, Cluster&);
+    Coord calculate_centroid(const Cluster&);
 
 protected:
     simtime_t lastDroveAt;
@@ -87,6 +93,11 @@ protected:
 
     void handleSelfMsg(cMessage* msg) override;
     void handlePositionUpdate(cObject* obj) override;
+
+private:
+    cCanvas *canvas;
 };
+
+
 
 } // namespace veins
