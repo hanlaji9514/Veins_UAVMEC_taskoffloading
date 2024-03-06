@@ -77,9 +77,11 @@ public:
     void handleReceivedTask();
     double euclidean_distance(Coord&, Coord&);
     Cluster merge_clusters(Cluster&, Cluster&);
-    std::vector<Cluster> agglomerative_clustering(std::unordered_map<LAddress::L2Type, Coord>, double);
+    std::vector<Cluster> agglomerative_clustering(std::unordered_map<LAddress::L2Type, Car_info>, double);
     double complete_linkage(Cluster&, Cluster&);
     Coord calculate_centroid(const Cluster&);
+    void spilt_Cluster(std::vector<Cluster>&, int);
+    void compute_hungarian_weight();
 
 protected:
     simtime_t lastDroveAt;

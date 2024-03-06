@@ -32,10 +32,11 @@
 
 using namespace veins;
 
-std::unordered_map<LAddress::L2Type, Coord> Car_map;
-std::unordered_map<LAddress::L2Type, Coord> UAV_map;
+std::unordered_map<LAddress::L2Type, Car_info> Car_map;
+std::unordered_map<LAddress::L2Type, UAV_info> UAV_maps;
 std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
 std::vector<Cluster> all_clusters;
+std::vector<std::vector<double>> hungarian_weight;
 std::vector<cOvalFigure*> all_circles;
 
 Define_Module(veins::MyMethodRSU);
@@ -217,36 +218,46 @@ void MyMethodRSU::handleSelfMsg(cMessage* msg)
         for (const auto& car : Car_map)
         {
             LAddress::L2Type id = car.first;
-            Coord coord = car.second;
+            Coord coord = car.second.Position;
             EV << "CAR ID : " << id << ", Coord : (" << coord.x << ", " << coord.y << ")" << endl;
         }
         EV << "MEC " << myId << ": All UAV in the map" << endl;
-        for (const auto& uav : UAV_map)
+        for (const auto& uav : UAV_maps)
         {
             LAddress::L2Type id = uav.first;
-            Coord coord = uav.second;
+            Coord coord = uav.second.Position;
             EV << "UAV ID : " << id << ", Coord : (" << coord.x << ", " << coord.y << ")" << endl;
         }
-        all_clusters = agglomerative_clustering(Car_map, 400);
-        for(auto &cluster : all_clusters)
+        if(Car_map.size() >= 4)
         {
-            cluster.centroid = calculate_centroid(cluster);
-            EV << "Car In Cluster --> centroid = " << cluster.centroid << ": ";
-            // 建立一個 cOvalFigure 物件
-            cOvalFigure *circle = new cOvalFigure("circle");
-            // 設定圓形的位置和大小，參數為 (左上角 x 座標, 左上角 y 座標, 寬度, 高度)
-            circle->setBounds(cFigure::Rectangle(cluster.centroid.x, cluster.centroid.y, 200, 200));
-            circle->setLineWidth(10);
-            // 設定圓形的顏色，參數為 cFigure::Color 物件，可以使用 RGB 值或預定義的顏色名稱
-            circle->setLineColor(cFigure::RED);
-            // 將圓形加入到地圖上，參數為地圖的指標
-            canvas->addFigure(circle);
-            all_circles.push_back(circle);
-            for(const auto car : cluster.CarInCluster)
+            all_clusters = agglomerative_clustering(Car_map, 400);
+            for(auto &cluster : all_clusters)
             {
-                EV << car << " ";
+                cluster.centroid = calculate_centroid(cluster);
+                EV << "Car In Cluster --> centroid = " << cluster.centroid << ": ";
+                // 建立一個 cOvalFigure 物件
+                cOvalFigure *circle = new cOvalFigure("circle");
+                // 設定圓形的位置和大小，參數為 (左上角 x 座標, 左上角 y 座標, 寬度, 高度)
+                circle->setBounds(cFigure::Rectangle(cluster.centroid.x, cluster.centroid.y, 200, 200));
+                circle->setLineWidth(10);
+                // 設定圓形的顏色，參數為 cFigure::Color 物件，可以使用 RGB 值或預定義的顏色名稱
+                circle->setLineColor(cFigure::RED);
+                // 將圓形加入到地圖上，參數為地圖的指標
+                canvas->addFigure(circle);
+                all_circles.push_back(circle);
+                cluster.Total_task = 0;
+                for(const auto car : cluster.CarInCluster)
+                {
+                    EV << car << " ";
+                    cluster.Total_task += Car_map[car].Num_Task;
+                }
+                EV << "/ Total task in this cluster: " << cluster.Total_task << endl;
             }
-            EV << endl;
+            compute_hungarian_weight();
+        }
+        for(auto& car : Car_map) // 將每台車輛的任務計數器歸0
+        {
+            car.second.Num_Task = 0;
         }
         cMessage *checkcarMsg = new cMessage("check_car");
         scheduleAt(simTime() + 0.5, checkcarMsg);
@@ -297,7 +308,7 @@ void MyMethodRSU::handleReceivedTask()
     }
 }
 
-std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LAddress::L2Type, Coord> Car_map, double threshold)
+std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LAddress::L2Type, Car_info> Car_map, double threshold)
 {
     std::vector<Cluster> clusters;
     for(const auto &p : Car_map) // 初始化每一個車輛都是一個獨立的cluster
@@ -369,7 +380,63 @@ std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LA
         }
         clusters = new_clusters;
     }
+    EV << "clusters.size() = " << clusters.size() << " / UAV_maps.size() = " << UAV_maps.size() << endl;
+    while(clusters.size() < UAV_maps.size()) // cluster數量太少，將車輛最多的cluster根據中心點的X座標切成兩半
+    {
+        EV << "Need to split!" << endl;
+        int max_index;
+        int max_cnt = -1;
+        for(int i=0; i<clusters.size(); i++)
+        {
+            int n = clusters[i].CarInCluster.size();
+            if(n > max_cnt)
+            {
+                max_index = i;
+                max_cnt = n;
+            }
+        }
+        if(max_cnt == 1)
+        {
+            EV << "The max_cnt = 1, Can't split!" << endl;
+            break;
+        }
+        else
+            spilt_Cluster(clusters, max_index);
+    }
+    while(clusters.size() > UAV_maps.size()) // cluster數量太多，將車輛數量最少的cluster刪除，不讓它成為UAV的目的地候選(不參與匈牙利演算法)
+    {
+        EV << "Need to abort the cluster with lowest number!" << endl;
+        int min_index;
+        int min_cnt = INT_MAX;
+        for(int i=0; i<clusters.size(); i++)
+        {
+            int n = clusters[i].CarInCluster.size();
+            if(n < min_cnt)
+            {
+                min_index = i;
+                min_cnt = n;
+            }
+        }
+        clusters.erase(clusters.begin() + min_index);
+    }
     return clusters;
+}
+
+void MyMethodRSU::spilt_Cluster(std::vector<Cluster>& clusters, int index)
+{
+    Coord centroid = calculate_centroid(clusters[index]);
+    Cluster need_to_spilt = clusters[index];
+    Cluster left_cluster, right_cluster;
+    clusters.erase(clusters.begin() + index);
+    for(int i=0; i<need_to_spilt.CarInCluster.size(); i++)
+    {
+        if(Car_map[need_to_spilt.CarInCluster[i]].Position.x > centroid.x)
+            right_cluster.CarInCluster.push_back(need_to_spilt.CarInCluster[i]);
+        else
+            left_cluster.CarInCluster.push_back(need_to_spilt.CarInCluster[i]);
+    }
+    clusters.push_back(left_cluster);
+    clusters.push_back(right_cluster);
 }
 
 // 一個函式，用來計算兩個cluster之間的全連結距離
@@ -380,7 +447,7 @@ double MyMethodRSU::complete_linkage(Cluster& c1, Cluster& c2)
     {
         for (const LAddress::L2Type& p2 : c2.CarInCluster)
         {
-            double distance = euclidean_distance(Car_map[p1], Car_map[p2]);
+            double distance = euclidean_distance(Car_map[p1].Position, Car_map[p2].Position);
             if (distance > max_distance)
             {
                 max_distance = distance;
@@ -411,13 +478,95 @@ Coord MyMethodRSU::calculate_centroid(const Cluster& c)
     for (const LAddress::L2Type& id : c.CarInCluster)
     {
         // 從 Car_map 中查找車輛的座標
-        Coord p = Car_map.at(id);
+        Coord p = Car_map.at(id).Position;
         x_sum += p.x;
         y_sum += p.y;
     }
     cen.x = x_sum / c.CarInCluster.size();
     cen.y = y_sum / c.CarInCluster.size();
     return cen;
+}
+
+void MyMethodRSU::compute_hungarian_weight()
+{
+    hungarian_weight.clear();
+    double max_resource = DBL_MIN;
+    double max_calculate = DBL_MIN;
+    for(auto &pair : UAV_maps) // 取得UAV中資源及計算能力的最大值，用於normalize
+    {
+        double tmp_re = pair.second.remain_cpu+pair.second.remain_mem;
+        max_resource = std::max(max_resource, tmp_re);
+        max_calculate = std::max(max_calculate, pair.second.cal_capability);
+    }
+    for(int i=0; i<all_clusters.size(); i++)
+    {
+        std::vector<double> distances;
+        std::vector<double> calculate;
+        std::vector<double> weight;
+        // 遍歷所有的UAV
+        for (auto &pair : UAV_maps)
+        {
+            // 獲取UAV的座標
+            Coord UAV_coord = pair.second.Position;
+            // 計算這個cluster的中心點和這個UAV的座標之間的距離
+            double distance = euclidean_distance(all_clusters[i].centroid, UAV_coord);
+            EV << "Cluster : " << all_clusters[i].centroid << " / UAV_coord : " << UAV_coord << " / Distance : " << distance << endl;
+            // 將距離添加到一維vector中
+            distances.push_back(distance);
+        }
+        for(auto &pair : UAV_maps)
+        {
+            // 先將UAV的計算能力做normalize
+            double status = 0.5 * ((pair.second.remain_cpu+pair.second.remain_mem) / max_resource) + 0.5 * ((pair.second.cal_capability) / max_calculate);
+            double c = all_clusters[i].Total_task / status;
+            EV << "Task in Cluster: " << all_clusters[i].Total_task << " / remain_cpu = " << pair.second.remain_cpu << " remain_mem = " << pair.second.remain_mem << " / UAV_status : " << status << " / calculate_cost : " << c << endl;
+            calculate.push_back(c);
+        }
+
+        double dis_min = *std::min_element(distances.begin(), distances.end());
+        double dis_max = *std::max_element(distances.begin(), distances.end());
+        double cal_min = *std::min_element(calculate.begin(), calculate.end());
+        double cal_max = *std::max_element(calculate.begin(), calculate.end());
+        for(auto &x : distances) // 距離成本
+        {
+            x = parameter.DistanceRatio * ((x - dis_min) / (dis_max - dis_min));
+        }
+        for(auto &x : calculate) // 運算成本(目前CPU,MEM資源越多、UAV運算能力越強的成本越低)
+        {
+            if(cal_max == cal_min)
+            {
+                x = 0;
+            }
+            else
+            {
+                x = parameter.CalculateRatio * ((x - cal_min) / (cal_max - cal_min));
+            }
+        }
+        EV << "distance_cost weight:" << endl;
+        for(auto &i : distances)
+        {
+            EV << i << " ";
+        }
+        EV << endl;
+        EV << "calculate_cost weight:" << endl;
+        for(auto &i : calculate)
+        {
+            EV << i << " ";
+        }
+        EV << endl;
+        weight.resize(distances.size());
+        std::transform(distances.begin(), distances.end(), calculate.begin(), weight.begin(), std::plus<double>()); // 將兩種weight加起來
+        hungarian_weight.push_back(weight);
+    }
+    EV << "hungarian weight:" << endl;
+    for(auto &i : hungarian_weight)
+    {
+        for(auto &j : i)
+        {
+            EV << j << " ";
+        }
+        EV << endl;
+    }
 }
 
 void MyMethodRSU::handlePositionUpdate(cObject* obj)

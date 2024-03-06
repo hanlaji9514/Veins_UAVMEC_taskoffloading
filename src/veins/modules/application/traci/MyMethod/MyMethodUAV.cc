@@ -56,7 +56,9 @@ void MyMethodUAV::initialize(int stage)
     }
     else if(stage == 1)
     {
-        UAV_map.insert(std::make_pair(myId, curPosition));
+        UAV_info uavInfo = {curPosition, UAV_resource.cal_capability, UAV_resource.remain_cpu, UAV_resource.remain_memory};
+        UAV_maps.insert(std::make_pair(myId, uavInfo));
+        EV << "I'm UAV " << myId << ", my calculate capability = " << UAV_resource.cal_capability << endl;
     }
 }
 
@@ -397,7 +399,9 @@ void MyMethodUAV::handleSelfMsg(cMessage* msg)
             EV << " Key: " << key << ", Generation time: " << pair.second.generate_time << ", Delay to MEC: " << pair.second.Delay_to_MEC << endl;
         }
         delete msg;
-        UAV_map[myId] = curPosition;
+        UAV_maps[myId].Position = curPosition;
+        UAV_maps[myId].remain_cpu = UAV_resource.remain_cpu;
+        UAV_maps[myId].remain_mem = UAV_resource.remain_memory;
         cMessage *resourceMsg = new cMessage("check_resource");
         scheduleAt(simTime() + 0.1, resourceMsg);
     }

@@ -59,7 +59,10 @@ LAB_par parameter =
     1.75, // P_MEC
 
     0.5,  // DelayRatio
-    0.5   // EnergyRatio
+    0.5,  // EnergyRatio
+
+    0.8,  // DistanceRatio
+    0.2   // CalculateRatio
 };
 
 Define_Module(veins::MyTest11p);

@@ -12,25 +12,27 @@
 
 using namespace veins;
 
-// 宣告全域變數
-extern int TotalPacket;
-extern double PacketLossTime;
-extern double SuccessedTime;
-extern double UAV_cal_capability;
-extern double MEC_cal_capability;
-
-extern std::unordered_map<LAddress::L2Type, Coord> Car_map;
-extern std::unordered_map<LAddress::L2Type, Coord> UAV_map;
-extern std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
-
-extern std::mt19937 rnd_generator;
-
 struct Cluster
 {
     std::vector<LAddress::L2Type> CarInCluster;
     Coord centroid;
     double max_distance;
     bool tmp_MergeOrNot;
+    int Total_task; // 上一個time_slot中總共的任務數量
+};
+
+struct Car_info
+{
+    Coord Position;
+    int Num_Task;
+};
+
+struct UAV_info
+{
+    Coord Position;
+    double cal_capability;
+    int remain_cpu;
+    int remain_mem;
 };
 
 // 宣告LAB_par(實驗參數)結構體
@@ -54,6 +56,9 @@ struct LAB_par
 
     double DelayRatio;
     double EnergyRatio;
+
+    double DistanceRatio;
+    double CalculateRatio;
 };
 extern LAB_par parameter;
 
@@ -71,6 +76,19 @@ struct task
 
     task(int q); // 定義在MyTest11p.cc中
 };
+
+// 宣告全域變數
+extern int TotalPacket;
+extern double PacketLossTime;
+extern double SuccessedTime;
+extern double UAV_cal_capability;
+extern double MEC_cal_capability;
+
+extern std::unordered_map<LAddress::L2Type, Car_info> Car_map;
+extern std::unordered_map<LAddress::L2Type, UAV_info> UAV_maps;
+extern std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
+
+extern std::mt19937 rnd_generator;
 
 
 

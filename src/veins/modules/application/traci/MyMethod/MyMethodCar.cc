@@ -50,7 +50,8 @@ void MyMethodCar::initialize(int stage)
     }
     else if(stage == 1)
     {
-        Car_map.insert(std::make_pair(myId, curPosition));
+        Car_info carInfo = {curPosition, 0};
+        Car_map.insert(std::make_pair(myId, carInfo));
         cMessage *taskMsg = new cMessage("generate_task");
         scheduleAt(simTime() + uniform(0.1 , 2.5), taskMsg);
         cMessage *refreshMsg = new cMessage("refresh_Coord");
@@ -251,6 +252,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
     {
         int numtasks = intuniform(3,8);
         TotalPacket += numtasks;
+        Car_map[myId].Num_Task += numtasks;
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
@@ -297,7 +299,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
     else if(!strcmp(msg->getName(), "refresh_Coord"))
     {
         delete msg;
-        Car_map[myId] = curPosition;
+        Car_map[myId].Position = curPosition;
         //EV << "I'm " << myId << " and my remained cpu = " << node_resource.remain_cpu << ", remained memory = " << node_resource.remain_memory << endl;
         cMessage *refreshMsg = new cMessage("refresh_Coord");
         scheduleAt(simTime() + 0.1, refreshMsg);
