@@ -88,6 +88,7 @@ extern std::unordered_map<LAddress::L2Type, Car_info> Car_map;
 extern std::unordered_map<LAddress::L2Type, UAV_info> UAV_maps;
 extern std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
 
+
 extern std::mt19937 rnd_generator;
 
 

@@ -41,6 +41,8 @@ std::vector<cOvalFigure*> all_circles;
 
 Define_Module(veins::MyMethodRSU);
 
+const double INF = 1e9; // 代表無限大，用於hungarian初始化
+
 void MyMethodRSU::initialize(int stage)
 {
     DemoBaseApplLayer::initialize(stage);
@@ -492,8 +494,10 @@ void MyMethodRSU::compute_hungarian_weight()
     hungarian_weight.clear();
     double max_resource = DBL_MIN;
     double max_calculate = DBL_MIN;
+    std::vector<LAddress::L2Type> UAV_id;
     for(auto &pair : UAV_maps) // 取得UAV中資源及計算能力的最大值，用於normalize
     {
+        UAV_id.push_back(pair.first);
         double tmp_re = pair.second.remain_cpu+pair.second.remain_mem;
         max_resource = std::max(max_resource, tmp_re);
         max_calculate = std::max(max_calculate, pair.second.cal_capability);
@@ -504,22 +508,24 @@ void MyMethodRSU::compute_hungarian_weight()
         std::vector<double> calculate;
         std::vector<double> weight;
         // 遍歷所有的UAV
-        for (auto &pair : UAV_maps)
+        for (LAddress::L2Type UAVid : UAV_id)
         {
+            auto UAVinfo = UAV_maps[UAVid];
             // 獲取UAV的座標
-            Coord UAV_coord = pair.second.Position;
+            Coord UAV_coord = UAVinfo.Position;
             // 計算這個cluster的中心點和這個UAV的座標之間的距離
             double distance = euclidean_distance(all_clusters[i].centroid, UAV_coord);
             EV << "Cluster : " << all_clusters[i].centroid << " / UAV_coord : " << UAV_coord << " / Distance : " << distance << endl;
             // 將距離添加到一維vector中
             distances.push_back(distance);
         }
-        for(auto &pair : UAV_maps)
+        for(LAddress::L2Type UAVid : UAV_id)
         {
+            auto UAVinfo = UAV_maps[UAVid];
             // 先將UAV的計算能力做normalize
-            double status = 0.5 * ((pair.second.remain_cpu+pair.second.remain_mem) / max_resource) + 0.5 * ((pair.second.cal_capability) / max_calculate);
-            double c = all_clusters[i].Total_task / status;
-            EV << "Task in Cluster: " << all_clusters[i].Total_task << " / remain_cpu = " << pair.second.remain_cpu << " remain_mem = " << pair.second.remain_mem << " / UAV_status : " << status << " / calculate_cost : " << c << endl;
+            double status = 0.5 * ((UAVinfo.remain_cpu+UAVinfo.remain_mem) / max_resource) + 0.5 * ((UAVinfo.cal_capability) / max_calculate);
+            double c = all_clusters[i].Total_task / status; // 運算成本(目前CPU,MEM資源越多、UAV運算能力越強的成本越低)
+            EV << "Task in Cluster: " << all_clusters[i].Total_task << " / remain_cpu = " << UAVinfo.remain_cpu << " remain_mem = " << UAVinfo.remain_mem << " / UAV_status : " << status << " / calculate_cost : " << c << endl;
             calculate.push_back(c);
         }
 
@@ -527,11 +533,11 @@ void MyMethodRSU::compute_hungarian_weight()
         double dis_max = *std::max_element(distances.begin(), distances.end());
         double cal_min = *std::min_element(calculate.begin(), calculate.end());
         double cal_max = *std::max_element(calculate.begin(), calculate.end());
-        for(auto &x : distances) // 距離成本
+        for(auto &x : distances) // 距離成本normalize
         {
             x = parameter.DistanceRatio * ((x - dis_min) / (dis_max - dis_min));
         }
-        for(auto &x : calculate) // 運算成本(目前CPU,MEM資源越多、UAV運算能力越強的成本越低)
+        for(auto &x : calculate) // 計算成本normalize
         {
             if(cal_max == cal_min)
             {
@@ -567,6 +573,94 @@ void MyMethodRSU::compute_hungarian_weight()
         }
         EV << endl;
     }
+
+    std::vector<int> assignment = hungarian(hungarian_weight);
+    // 輸出結果
+    double total = 0; // 總成本
+    EV << "UAV Dispatching:" << endl;
+    // 輸出每個集群分配給無人機的結果和成本
+    for (int i = 0; i < assignment.size(); ++i)
+    {
+        EV << "Cluster " << i << " assigned to UAV " << UAV_id[assignment[i]] << " and cost : " << hungarian_weight[i][assignment[i]] << endl;
+        total += hungarian_weight[i][assignment[i]]; // 計算總成本
+        Dispatch_Coord[UAV_id[assignment[i]]] = all_clusters[i].centroid;
+    }
+    EV << "UAV and its dispatched coordination :" << endl;
+    for(auto pair : Dispatch_Coord)
+    {
+        EV << "UAV " << pair.first << " : " << pair.second << endl;
+    }
+    EV << "Total cost = " << total << endl; // 輸出總成本
+
+}
+
+// 匈牙利演算法的實現
+std::vector<int> MyMethodRSU::hungarian(const std::vector<std::vector<double>>& cost)
+{
+    // 初始化變量
+    int n = cost.size(), m = cost[0].size(); // n和m分別代表成本矩陣的行數和列數
+    std::vector<double> u(n+1), v(m+1), p(m+1), way(m+1); // u和v用於潛在的行和列減法操作，p用於存儲匹配信息，way用於記錄最佳路徑
+    std::vector<int> ans(n); // 存儲最終的分配結果
+
+    // 主要的匈牙利演算法
+    for (int i=1; i<=n; ++i)
+    {
+        p[0] = i;
+        int j0 = 0; // j0用於記錄當前找到的最小值所在的列
+        std::vector<double> minv(m+1, INF); // minv用於存儲每列的最小值
+        std::vector<bool> used(m+1, false); // used標記某列是否已被選擇
+        do {
+            used[j0] = true;
+            int i0 = p[j0], j1; // i0是當前行，j1是下一列
+            double delta = INF; // delta用於記錄最小的未選擇列的最小值
+            // 尋找未選擇列的最小值
+            for (int j=1; j<=m; ++j)
+            {
+                if (!used[j])
+                {
+                    double cur = cost[i0-1][j-1]-u[i0]-v[j]; // 計算調整後的成本
+                    if (cur < minv[j])
+                    {
+                        minv[j] = cur;
+                        way[j] = j0; // 更新最佳路徑
+                    }
+                    if (minv[j] < delta)
+                    {
+                        delta = minv[j];
+                        j1 = j; // 更新最小值所在的列
+                    }
+                }
+            }
+            // 更新u和v以及未選擇列的最小值
+            for (int j=0; j<=m; ++j)
+            {
+                if (used[j])
+                {
+                    u[p[j]] += delta;
+                    v[j] -= delta;
+                } else
+                {
+                    minv[j] -= delta;
+                }
+            }
+            j0 = j1; // 移動到下一列
+        } while (p[j0] != 0);
+        // 更新匹配信息
+        do {
+            int j1 = way[j0];
+            p[j0] = p[j1];
+            j0 = j1;
+        } while (j0);
+    }
+    // 填充答案向量
+    for (int j=1; j<=m; ++j)
+    {
+        if (p[j] != 0)
+        {
+            ans[p[j]-1] = j-1;
+        }
+    }
+    return ans; // 返回最終的分配結果
 }
 
 void MyMethodRSU::handlePositionUpdate(cObject* obj)

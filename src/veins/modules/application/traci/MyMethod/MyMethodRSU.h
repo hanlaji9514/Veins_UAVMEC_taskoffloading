@@ -82,6 +82,7 @@ public:
     Coord calculate_centroid(const Cluster&);
     void spilt_Cluster(std::vector<Cluster>&, int);
     void compute_hungarian_weight();
+    std::vector<int> hungarian(const std::vector<std::vector<double>>&);
 
 protected:
     simtime_t lastDroveAt;
