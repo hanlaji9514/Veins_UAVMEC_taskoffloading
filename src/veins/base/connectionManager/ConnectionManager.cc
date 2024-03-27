@@ -44,6 +44,12 @@ double ConnectionManager::calcInterfDist()
         EV_INFO << "max interference distance:" << interfDistance << endl;
         return interfDistance;
     }
+    if (hasPar("maxInterfDistNodes"))
+    {
+        double interfDistanceNodes = par("maxInterfDistNodes").doubleValue();
+            EV_INFO << "max interference distance between Nodes:" << interfDistanceNodes << endl;
+            return interfDistanceNodes;
+    }
     else {
         throw cRuntimeError("ConnectionManager: No value for maximum interference distance (maxInterfDist) provided.");
     }

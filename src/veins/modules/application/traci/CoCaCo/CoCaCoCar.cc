@@ -21,7 +21,8 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
-#include <veins/modules/application/traci/CoCaCo/CoCaCoCar.h>
+#include "veins/modules/application/traci/CoCaCo/CoCaCoCar.h"
+
 #include "veins/modules/application/traci/TraCIDemo11pMessage_m.h"
 
 #include "veins/modules/messages/DemoSafetyMessage_m.h"
@@ -469,6 +470,7 @@ void CoCaCoCar::CoCaCoTaskOffloading()
                 UAV_MapData minDelayUAV_in_my_Area = UAV_map[minDelayUAV]; // 找到delay最小的UAV
                 if(minDelayUAV_in_my_Area.Delay_to_MEC != -1) // Delay最小的UAV有和MEC連線 => 任務分為車輛、UAV、MEC計算
                 {
+                    CAR_UAV_MEC++;
                     // 注意MEC任務傳輸路徑：車輛->UAV->MEC
                     EV << myId << ": handle the task by myself and UAV and MEC(CAR->UAV->MEC)! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 3 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     node_resource.waiting_tasks.push_back({top_task, 6}); // 將任務放進等待任務欄中，6代表車輛(1)運算+UAV(2)運算+MEC(3)運算
@@ -488,6 +490,7 @@ void CoCaCoCar::CoCaCoTaskOffloading()
                 {
                     if(Nearest_MEC != -1) // UAV沒和MEC連線，車輛自己有和MEC連線 => 任務分為車輛、UAV、MEC計算
                     {
+                        CAR_UAV_MEC++;
                         // 注意MEC任務傳輸路徑：車輛->MEC
                         EV << myId << ": handle the task by myself and UAV and MEC(CAR->MEC)! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 3 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                         node_resource.waiting_tasks.push_back({top_task, 6}); // 將任務放進等待任務欄中，6代表車輛(1)運算+UAV(2)運算+MEC(3)運算
@@ -513,6 +516,7 @@ void CoCaCoCar::CoCaCoTaskOffloading()
                     }
                     else // UAV沒和MEC連線，車輛自己也沒和MEC連線 => 任務分為車輛和UAV計算
                     {
+                        CAR_UAV++;
                         EV << myId << ": handle the task by myself and UAV! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 2 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                         node_resource.waiting_tasks.push_back({top_task, 3}); // 將任務放進等待任務欄中，3代表車輛(1)運算+UAV(2)運算
                         node_resource.queuing_tasks.push({top_task, top_task.packet_size / 2}); // 將車輛需要自己算的部分packet size放入
@@ -532,6 +536,7 @@ void CoCaCoCar::CoCaCoTaskOffloading()
             {
                 if(Nearest_MEC != -1) // 車輛沒連線UAV、但是有連線MEC => 任務分為車輛和MEC計算
                 {
+                    CAR_MEC++;
                     EV << myId << ": handle the task by myself and MEC! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 2 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     node_resource.waiting_tasks.push_back({top_task, 4}); // 將任務放進等待任務欄中，4代表車輛運算+MEC運算
                     node_resource.queuing_tasks.push({top_task, top_task.packet_size / 2}); // 將車輛需要自己算的部分packet size放入
@@ -547,6 +552,7 @@ void CoCaCoCar::CoCaCoTaskOffloading()
                 }
                 else // 車輛沒連線UAV也沒連線MEC => 車輛自行運算
                 {
+                    CAR_SELF++;
                     EV << myId << ": handle the task by myself!" << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     node_resource.waiting_tasks.push_back({top_task, 1}); // 將任務放進等待任務欄中，1代表只有車輛運算
                     node_resource.queuing_tasks.push({top_task, top_task.packet_size}); // 將車輛需要自己算的部分packet size放入
@@ -925,4 +931,8 @@ void CoCaCoCar::finish()
     EV << "Transmission Successes Time = " << SuccessedTime << endl;
     EV << "Transmission Rate = " << TransRate << endl;
     EV << "Packet Loss Rate = " << PacketLossRate << endl;
+    EV << "CAR_SELF = " << CAR_SELF << endl;
+    EV << "CAR_UAV = " << CAR_UAV << endl;
+    EV << "CAR_MEC = " << CAR_MEC << endl;
+    EV << "CAR_UAV_MEC = " << CAR_UAV_MEC << endl;
 }

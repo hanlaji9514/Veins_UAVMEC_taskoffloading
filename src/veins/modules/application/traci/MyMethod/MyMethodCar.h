@@ -52,7 +52,7 @@ struct car_resource
     Coord tmp_Position;
     Coord cSpeed;
     LAddress::L2Type followed_car;
-    double cal_capability = 500000;
+    double cal_capability = 250000;
     std::queue<task> pending_tasks; // 待處理之任務(FIFO)
     std::list<task> handling_tasks; // 正在被車輛處理之任務
     //std::list<task> waiting_tasks; // 分配完等待處理的任務
@@ -79,6 +79,7 @@ struct UAV_MapData
     int remain_cpu;
     int remain_memory;
 };
+
 
 class VEINS_API MyMethodCar : public DemoBaseApplLayer {
 public:

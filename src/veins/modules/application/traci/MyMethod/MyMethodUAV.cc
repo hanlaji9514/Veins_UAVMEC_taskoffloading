@@ -106,6 +106,7 @@ void MyMethodUAV::onWSM(BaseFrame1609_4* frame)
         EV << "UAV " << myId << ": received the task request from " << wsm->getSenderAddress() << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() << endl;
         handleReceivedTask();
     }
+    /*
     else if(std::string(wsm->getName()).substr(0, 14) == "UAV_MEC_handle") // 車輛傳送給UAV要求轉傳給MEC(1/3)，以及UAV自己算(1/3)的任務請求
     {
 
@@ -142,9 +143,46 @@ void MyMethodUAV::onWSM(BaseFrame1609_4* frame)
         SendtoMEC->setRecipientAddress(Nearest_MEC);
         SendtoMEC->setName(s.c_str());
         sendDown(SendtoMEC);
-
         handleReceivedTask();
+    }
+    */
+    else if(std::string(wsm->getName()).substr(0, 14) == "UAV_MEC_handle") // 車輛傳送給UAV要求轉傳給MEC
+    {
 
+        std::string name = wsm->getName();
+        std::stringstream ss(name);
+        std::string segment;
+        std::vector<std::string> seglist;
+
+        while(std::getline(ss, segment, '_'))
+        {
+           seglist.push_back(segment);
+        }
+        // 創建一個 task 物件並設定其成員變數
+        // seglist[3] 是 require_cpu
+        // seglist[4] 是 require_memory
+        // seglist[5] 是 full packet size
+        task received_t;
+        received_t.id = wsm->getSenderAddress();
+        received_t.packet_size = wsm->getByteLength();
+        received_t.require_cpu = std::stoi(seglist[3]);
+        received_t.require_memory = std::stoi(seglist[4]);
+        received_t.full_packet_size = std::stoi(seglist[5]);
+        //UAV_resource.received_tasks.push(received_t);
+        UAV_resource.waiting_tasks.push_back(received_t);
+
+        //EV << "UAV " << myId << ": received the task request from " << wsm->getSenderAddress() << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() / 2 << endl;
+        EV << "UAV " << myId << ": Relaying the task from car " << wsm->getSenderAddress() << " to MEC " << Nearest_MEC << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength()<< endl;
+
+        std::string s = std::string(wsm->getName()).substr(4) + "_" + std::to_string(wsm->getSenderAddress());
+        TraCIDemo11pMessage *SendtoMEC = new TraCIDemo11pMessage;
+        populateWSM(SendtoMEC);
+        SendtoMEC->setByteLength(received_t.packet_size);
+        SendtoMEC->setSenderAddress(myId);
+        SendtoMEC->setRecipientAddress(Nearest_MEC);
+        SendtoMEC->setName(s.c_str());
+        sendDown(SendtoMEC);
+        //handleReceivedTask();
     }
     else if(std::string(wsm->getName()).substr(0, 15) == "MECTaskSendBack") // UAV收到MEC處理完成的任務，要轉傳回給車輛
     {
@@ -295,6 +333,14 @@ void MyMethodUAV::handleSelfMsg(cMessage* msg)
         }
         bsm->setRemain_cpu(UAV_resource.remain_cpu);
         bsm->setRemain_mem(UAV_resource.remain_memory);
+        if(!Dispatch_Coord.empty())
+        {
+            Coord myDestination = Dispatch_Coord[myId];
+            EV << "UAV " << myId << ": Change my destination to " << myDestination << endl;
+            auto mobilityModule = check_and_cast<veins::TargetedMobility*>(getParentModule()->getSubmodule("mobility"));
+            // 呼叫targetMobility的去更新目的地
+            mobilityModule->updateDestination(myDestination);
+        }
         delete msg;
         sendDown(bsm);
         cMessage *beaconTimer = new cMessage("beacon");
@@ -356,7 +402,7 @@ void MyMethodUAV::handleSelfMsg(cMessage* msg)
                 SendBack->setRecipientAddress(it->id);
                 SendBack->setName(s.c_str());
                 sendDown(SendBack);
-                EV << "UAV " << myId << ": Handling finish. Handle Size = " << finish_size << ", full packet size = " << it->full_packet_size << ", send back to car " << finish_id << endl;
+                EV << "UAV " << myId << ": Handling finish. Handle Size = " << finish_size << ", full packet size = " << it->full_packet_size << ", send back to car " << finish_id << " / remain cpu = " << UAV_resource.remain_cpu << ", remain memory = " << UAV_resource.remain_memory << endl;
                 it = UAV_resource.handling_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
 
                 BeaconMessage *bsm = new BeaconMessage("UAV_beacon"); // 更新目前的狀態給其他車輛知道

@@ -25,6 +25,7 @@
 
 #include "veins/modules/application/ieee80211p/DemoBaseApplLayer.h"
 #include "veins/modules/application/traci/common.h" // 所有全域變數宣告在common.h中，並在MyTest11p.cc中定義
+#include "veins/base/utils/FindModule.h"
 #include <queue>
 #include <math.h>
 
@@ -43,6 +44,7 @@ namespace veins {
  * @author David Eckhoff : rewriting, moving functionality to DemoBaseApplLayer, adding WSA
  *
  */
+
 
 struct task
 {

@@ -81,8 +81,19 @@ struct task
 extern int TotalPacket;
 extern double PacketLossTime;
 extern double SuccessedTime;
+extern double averageDelayPercent; // 平均完成時間佔總delay限制多少比例
 extern double UAV_cal_capability;
 extern double MEC_cal_capability;
+
+extern int Successed_Car;
+extern int Successed_UAV;
+extern int Successed_MEC;
+
+extern int CAR_SELF;
+extern int CAR_UAV;
+extern int CAR_MEC;
+extern int CAR_UAV_MEC;
+
 
 extern std::unordered_map<LAddress::L2Type, Car_info> Car_map;
 extern std::unordered_map<LAddress::L2Type, UAV_info> UAV_maps;
