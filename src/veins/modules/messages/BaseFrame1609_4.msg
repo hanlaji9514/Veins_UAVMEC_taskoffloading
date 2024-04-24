@@ -20,6 +20,7 @@
 // Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 //
 
+import veins.base.utils.Coord;
 import veins.base.utils.SimpleAddress;
 
 namespace veins;
@@ -33,4 +34,6 @@ packet BaseFrame1609_4 {
     int psid = 0;
     //Recipient of frame (-1 for any)
     LAddress::L2Type recipientAddress = -1;
+    //The Coordination of Sender(Added by my self)
+    Coord SenderPosition;
 }

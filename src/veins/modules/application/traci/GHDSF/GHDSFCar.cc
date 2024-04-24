@@ -48,21 +48,23 @@ std::mt19937 rnd_generator;
 
 LAB_par parameter =
 {
-    1,    // E1_car = 發送器所耗功率
-    1.25, // E2_car = 放大器所耗功率
-    1.5,  // E3_car = 接收器所耗功率
+    0.000005 * 1,    // E1_car = 發送器所耗功率
+    0.000005 * 1, // E2_car = 放大器所耗功率
+    0.000005 * 1,  // E3_car = 接收器所耗功率
 
-    1,    // E1_UAV
-    1.25, // E2_UAV
-    1.5,  // E3_UAV
+    0.000005 * 1.25,    // E1_UAV
+    0.000005 * 1.25, // E2_UAV
+    0.000005 * 1.25,  // E3_UAV
 
-    1,    // E1_MEC
-    1.25, // E2_MEC
-    1.5,  // E3_MEC
+    0.000005 * 1.75,    // E1_MEC
+    0.000005 * 1.75, // E2_MEC
+    0.000005 * 1.75,  // E3_MEC
 
-    100 * 1,    // P_car = 處理任務所耗功率
-    100 * 1.25, // P_UAV
-    100 * 1.5, // P_MEC
+    1000 * 1,    // P_car = 處理任務所耗功率
+    1000 * 1.5, // P_UAV
+    1000 * 2, // P_MEC
+
+    20000, // Energy_perMeter
 
     0.5,  // DelayRatio
     0.5,  // EnergyRatio
@@ -84,6 +86,11 @@ task::task (int q)
     else if(rnd > 100)
         rnd = 100;
     int packet_rnd = rand() % 100;
+    int MEC_rnd = rand() % 100;
+    if(MEC_rnd <= 40)
+        must_send_MEC = true;
+    else
+        must_send_MEC = false;
     switch (q)
     {
         case 1:
@@ -173,6 +180,12 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
         int Back_FullPacketSize = std::stoi(std::string(wsm->getName()).substr(13));
         LAddress::L2Type Back_UAVID = wsm->getSenderAddress();
         EV << myId << ": Received the finished task part from UAV " << Back_UAVID << ", Full packet size = " << Back_FullPacketSize << endl;
+        double dis_UAVtoCAR_x = curPosition.x - wsm->getSenderPosition().x;
+        double dis_UAVtoCAR_y = curPosition.y - wsm->getSenderPosition().y;
+        double dis_UAVtoCAR = dis_UAVtoCAR_x * dis_UAVtoCAR_x + dis_UAVtoCAR_y * dis_UAVtoCAR_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+        double energy_UAVtoCAR = (parameter.E1_UAV + parameter.E3_car + (parameter.E2_UAV * dis_UAVtoCAR)) * wsm->getByteLength();
+        energyCommunication += energy_UAVtoCAR;
+        EV << "(UAV->CAR)Energy in communication = " << energy_UAVtoCAR << " / energyCommunication = " << energyCommunication << endl;
         for(auto it = node_resource.waiting_tasks.begin(); it != node_resource.waiting_tasks.end();)
         {
             if (it->first.packet_size == Back_FullPacketSize)
@@ -184,16 +197,18 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1;
+                        averageDelayPercent += 1.0;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
                     else
                     {
                         SuccessedTime++;
-                        averageDelayPercent += ((it->first.expire_time - simTime().dbl()) / it->first.delay_limit);
+                        Successed_UAV++;
+                        averageDelayPercent += (1.0 - (it->first.expire_time - simTime().dbl()) / it->first.delay_limit);
                         EV << myId << ": Size = " << it->first.packet_size << " : handling success!" << " / Success Time : " << SuccessedTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
+                        taskSize += it->first.packet_size;
                     }
 
                     it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
@@ -207,6 +222,12 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
     {
         int Back_FullPacketSize = std::stoi(std::string(wsm->getName()).substr(21));
         EV << myId << ": Received the finished task relayed from UAV " << wsm->getSenderAddress() << ", and the Full packet size = " << Back_FullPacketSize << endl;
+        double dis_UAVtoCAR_x = curPosition.x - wsm->getSenderPosition().x;
+        double dis_UAVtoCAR_y = curPosition.y - wsm->getSenderPosition().y;
+        double dis_UAVtoCAR = dis_UAVtoCAR_x * dis_UAVtoCAR_x + dis_UAVtoCAR_y * dis_UAVtoCAR_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+        double energy_UAVtoCAR = (parameter.E1_UAV + parameter.E3_car + (parameter.E2_UAV * dis_UAVtoCAR)) * wsm->getByteLength();
+        energyCommunication += energy_UAVtoCAR;
+        EV << "(UAV->CAR)Energy in communication = " << energy_UAVtoCAR << " / energyCommunication = " << energyCommunication << endl;
         for(auto it = node_resource.waiting_tasks.begin(); it != node_resource.waiting_tasks.end();)
         {
             if (it->first.packet_size == Back_FullPacketSize)
@@ -218,16 +239,18 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1;
+                        averageDelayPercent += 1.0;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
                     else
                     {
                         SuccessedTime++;
-                        averageDelayPercent += ((it->first.expire_time - simTime().dbl()) / it->first.delay_limit);
+                        Successed_MEC++;
+                        averageDelayPercent += (1.0 - (it->first.expire_time - simTime().dbl()) / it->first.delay_limit);
                         EV << myId << ": Size = " << it->first.packet_size << " : handling success!" << " / Success Time : " << SuccessedTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
+                        taskSize += it->first.packet_size;
                     }
 
                     it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
@@ -241,6 +264,12 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
     {
         int Back_FullPacketSize = std::stoi(std::string(wsm->getName()).substr(16));
         EV << myId << ": Received the finished task from MEC " << wsm->getSenderAddress() << ", and the Full packet size = " << Back_FullPacketSize << endl;
+        double dis_MECtoCAR_x = curPosition.x - wsm->getSenderPosition().x;
+        double dis_MECtoCAR_y = curPosition.y - wsm->getSenderPosition().y;
+        double dis_MECtoCAR = dis_MECtoCAR_x * dis_MECtoCAR_x + dis_MECtoCAR_y * dis_MECtoCAR_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+        double energy_MECtoCAR = (parameter.E1_MEC + parameter.E3_car + (parameter.E2_MEC * dis_MECtoCAR)) * wsm->getByteLength();
+        energyCommunication += energy_MECtoCAR;
+        EV << "(MEC->CAR)Energy in communication = " << energy_MECtoCAR << " / energyCommunication = " << energyCommunication << endl;
         for(auto it = node_resource.waiting_tasks.begin(); it != node_resource.waiting_tasks.end();)
         {
             if (it->first.packet_size == Back_FullPacketSize)
@@ -252,16 +281,18 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1;
+                        averageDelayPercent += 1.0;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
                     else
                     {
                         SuccessedTime++;
-                        averageDelayPercent += ((it->first.expire_time - simTime().dbl()) / it->first.delay_limit);
+                        Successed_MEC++;
+                        averageDelayPercent += (1.0 - (it->first.expire_time - simTime().dbl()) / it->first.delay_limit);
                         EV << myId << ": Size = " << it->first.packet_size << " : handling success!" << " / Success Time : " << SuccessedTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
+                        taskSize += it->first.packet_size;
                     }
 
                     it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
@@ -385,7 +416,7 @@ void GHDSFCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            EV << "I'm " << myId << " and I generate a task: QoS = " << node_resource.pending_tasks.back().qos << " , Delay_limit : " << node_resource.pending_tasks.back().delay_limit <<  " , start_time = " << node_resource.pending_tasks.back().start_time << " , expire_time = " << node_resource.pending_tasks.back().expire_time << " , size = " << node_resource.pending_tasks.back().packet_size << endl;
+            EV << "I'm " << myId << " and I generate a task: QoS = " << node_resource.pending_tasks.back().qos << " , Delay_limit : " << node_resource.pending_tasks.back().delay_limit <<  " , start_time = " << node_resource.pending_tasks.back().start_time << " , expire_time = " << node_resource.pending_tasks.back().expire_time << " , size = " << node_resource.pending_tasks.back().packet_size << " / must MEC = " << node_resource.pending_tasks.back().must_send_MEC << endl;
         }
         //CoCaCoTaskOffloading();
         dispatchTaskConsiderEnergy();
@@ -444,16 +475,18 @@ void GHDSFCar::handleSelfMsg(cMessage* msg)
                             if(simTime() > it2->first.expire_time)
                             {
                                 PacketLossTime++;
-                                averageDelayPercent += 1;
+                                averageDelayPercent += 1.0;
                                 EV << myId << ": Full packet Size = " << it2->first.packet_size << " : packet loss!" << " Packet Loss Time : " << PacketLossTime << endl;
                                 EV << "The expire time : " << it2->first.expire_time << ", and now is : " << simTime() << endl;
                             }
                             else
                             {
                                 SuccessedTime++;
-                                averageDelayPercent += ((it2->first.expire_time - simTime().dbl()) / it2->first.delay_limit);
+                                Successed_Car++;
+                                averageDelayPercent += (1.0 - (it2->first.expire_time - simTime().dbl()) / it2->first.delay_limit);
                                 EV << myId << ": Full packet Size = " << it2->first.packet_size << " : handling success!" << " Success Time : " << SuccessedTime << endl;
                                 EV << "The expire time : " << it2->first.expire_time << ", and now is : " << simTime() << endl;
+                                taskSize += it2->first.packet_size;
                             }
                             it2 = node_resource.waiting_tasks.erase(it2);  // 刪除符合條件的元素並更新迭代器
                         }
@@ -537,7 +570,8 @@ void GHDSFCar::clearExpiredTask() // 在node離開地圖前，刪除已過期的
         if (it->first.expire_time < simTime().dbl())
         {
             PacketLossTime++;
-            averageDelayPercent += 1;
+            CantFindOffload++;
+            averageDelayPercent += 1.0;
             EV << myId << " : My Task is expired, packet loss! Size = " << it->first.packet_size << " / Packet loss time : " << PacketLossTime << endl;
             it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
             continue;
@@ -667,7 +701,8 @@ void GHDSFCar::CoCaCoTaskOffloading()
         else
         {
             PacketLossTime++;
-            averageDelayPercent += 1;
+            CantFindOffload++;
+            averageDelayPercent += 1.0;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
     }
@@ -691,6 +726,8 @@ void GHDSFCar::handleQueuingTask()
             node_resource.handling_tasks.push_back(top_task);
             std::string s = "myTask_"+ std::to_string(top_task.packet_size);
             EV << myId << ": handling the task! Handling time = " << cal_time << " / packet size = " << top_task.packet_size << " / handle size = " << top_task_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
+            energyComputing += cal_time * parameter.P_car;
+            EV << myId << ": EnergyComsumption = " << cal_time * parameter.P_car << " / energyComputing = " << energyComputing << endl;
             cMessage *Task_handlingTimer = new cMessage(s.c_str());
             selfscheduledMessages.push_back({Task_handlingTimer, cal_time});
         }
@@ -738,9 +775,12 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                 if(cal_time <= (top_task.expire_time - simTime().dbl())) // 來得及算完才將其列考慮之一
                 {
                     delay_car = cal_time;
-                    energy_car = parameter.P_car * top_task.packet_size;
+                    //energy_car = parameter.P_car * top_task.packet_size;
+                    energy_car = parameter.P_car * cal_time;
                     cost_car = parameter.DelayRatio * delay_car + parameter.EnergyRatio * energy_car;
                 }
+                if(top_task.must_send_MEC)
+                    cost_car = DBL_MAX;
             }
             if(!UAV_map.empty())
             {
@@ -751,9 +791,10 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                         double dis_CARtoUAV_x = curPosition.x - UAV_in_my_Area.second.position.x;
                         double dis_CARtoUAV_y = curPosition.y - UAV_in_my_Area.second.position.y;
                         double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
-                        double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + parameter.E1_UAV + parameter.E3_car + (parameter.E2_car + parameter.E2_UAV) * dis_CARtoUAV); // 傳去和傳回來都一起先算
-                        double energy_UAVtoMEC = (parameter.E1_UAV + parameter.E3_MEC + parameter.E1_MEC + parameter.E3_UAV + (parameter.E2_UAV + parameter.E2_MEC) * UAV_in_my_Area.second.Distance_to_MEC * UAV_in_my_Area.second.Distance_to_MEC); // 傳去和傳回來都一起先算
-                        double tmp_energy_UAV_MEC = parameter.P_MEC * top_task.packet_size + energy_CARtoUAV + energy_UAVtoMEC;
+                        double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + parameter.E1_UAV + parameter.E3_car + (parameter.E2_car + parameter.E2_UAV) * dis_CARtoUAV) * top_task.packet_size; // 傳去和傳回來都一起先算
+                        double energy_UAVtoMEC = (parameter.E1_UAV + parameter.E3_MEC + parameter.E1_MEC + parameter.E3_UAV + (parameter.E2_UAV + parameter.E2_MEC) * UAV_in_my_Area.second.Distance_to_MEC * UAV_in_my_Area.second.Distance_to_MEC) * top_task.packet_size; // 傳去和傳回來都一起先算
+                        //double tmp_energy_UAV_MEC = parameter.P_MEC * top_task.packet_size + energy_CARtoUAV + energy_UAVtoMEC;
+                        double tmp_energy_UAV_MEC = (parameter.P_MEC * top_task.packet_size / (MEC_cal_capability * top_task.require_cpu / 100.0)) + energy_CARtoUAV + energy_UAVtoMEC;
                         // MEC 總處理時間 = 車輛到UAV傳輸時間(來回) + UAV到MEC傳輸時間(來回) + MEC處理時間
                         // Delay和Delay_to_MEC是beacon(packet_size=300)的傳輸時間，在這邊算大略的傳輸耗時直接根據packet_size等比例放大計算
                         double tmp_delay_UAV_MEC = 2 * ((UAV_in_my_Area.second.Delay + UAV_in_my_Area.second.Delay_to_MEC) / 300 * top_task.packet_size) + top_task.packet_size / (MEC_cal_capability * top_task.require_cpu / 100.0);
@@ -769,25 +810,29 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                         }
                     }
                     // 計算車輛offload到該UAV的成本(車輛->UAV)
-                    if(UAV_in_my_Area.second.remain_cpu >= top_task.require_cpu && UAV_in_my_Area.second.remain_memory >= top_task.require_memory)
+                    if(top_task.must_send_MEC == false)
                     {
-                        double dis_CARtoUAV_x = curPosition.x - UAV_in_my_Area.second.position.x;
-                        double dis_CARtoUAV_y = curPosition.y - UAV_in_my_Area.second.position.y;
-                        double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
-                        double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + parameter.E1_UAV + parameter.E3_car + (parameter.E2_car + parameter.E2_UAV) * dis_CARtoUAV); // 傳去和傳回來都一起先算(這邊不包含運算耗能)
-                        double tmp_energy_UAV = parameter.P_UAV * top_task.packet_size + energy_CARtoUAV;
-                        // UAV 總處理時間 = 車輛到UAV傳輸時間(來回) + UAV處理時間
-                        // Delay是beacon(packet_size=300)(UAV->車輛)的傳輸時間，在這邊算大略的傳輸耗時直接根據packet_size等比例放大計算
-                        double tmp_delay_UAV = 2 * (UAV_in_my_Area.second.Delay / 300 * top_task.packet_size) + top_task.packet_size / (UAV_cal_capability * top_task.require_cpu / 100.0);
-                        double tmp_cost_UAV = parameter.DelayRatio * tmp_delay_UAV + parameter.EnergyRatio * tmp_energy_UAV;
-                        if(tmp_delay_UAV > (top_task.expire_time - simTime().dbl())) // 來不及算完就把成本當作DBL_MAX
-                            tmp_cost_UAV = DBL_MAX;
-                        if(tmp_cost_UAV < cost_UAV)
+                        if(UAV_in_my_Area.second.remain_cpu >= top_task.require_cpu && UAV_in_my_Area.second.remain_memory >= top_task.require_memory)
                         {
-                            cost_UAV = tmp_cost_UAV;
-                            energy_UAV = tmp_energy_UAV;
-                            delay_UAV = tmp_delay_UAV;
-                            candidate_UAV = UAV_in_my_Area.first;
+                            double dis_CARtoUAV_x = curPosition.x - UAV_in_my_Area.second.position.x;
+                            double dis_CARtoUAV_y = curPosition.y - UAV_in_my_Area.second.position.y;
+                            double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+                            double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + parameter.E1_UAV + parameter.E3_car + (parameter.E2_car + parameter.E2_UAV) * dis_CARtoUAV) * top_task.packet_size; // 傳去和傳回來都一起先算(這邊不包含運算耗能)
+                            //double tmp_energy_UAV = parameter.P_UAV * top_task.packet_size + energy_CARtoUAV;
+                            double tmp_energy_UAV = (parameter.P_UAV * top_task.packet_size / (UAV_cal_capability * top_task.require_cpu / 100.0)) + energy_CARtoUAV;
+                            // UAV 總處理時間 = 車輛到UAV傳輸時間(來回) + UAV處理時間
+                            // Delay是beacon(packet_size=300)(UAV->車輛)的傳輸時間，在這邊算大略的傳輸耗時直接根據packet_size等比例放大計算
+                            double tmp_delay_UAV = 2 * (UAV_in_my_Area.second.Delay / 300 * top_task.packet_size) + top_task.packet_size / (UAV_cal_capability * top_task.require_cpu / 100.0);
+                            double tmp_cost_UAV = parameter.DelayRatio * tmp_delay_UAV + parameter.EnergyRatio * tmp_energy_UAV;
+                            if(tmp_delay_UAV > (top_task.expire_time - simTime().dbl())) // 來不及算完就把成本當作DBL_MAX
+                                tmp_cost_UAV = DBL_MAX;
+                            if(tmp_cost_UAV < cost_UAV)
+                            {
+                                cost_UAV = tmp_cost_UAV;
+                                energy_UAV = tmp_energy_UAV;
+                                delay_UAV = tmp_delay_UAV;
+                                candidate_UAV = UAV_in_my_Area.first;
+                            }
                         }
                     }
                 }
@@ -813,6 +858,7 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
             EV << "delay_UAV = " << delay_UAV << " / energy_UAV = " << energy_UAV << " / cost_UAV = " << cost_UAV << endl;
             EV << "delay_UAV_MEC = " << delay_UAV_MEC << " / energy_UAV_MEC = " << energy_UAV_MEC << " / cost_UAV_MEC = " << cost_UAV_MEC << endl;
             EV << "delay_normalize = " << delay_normalize << " / energy_normalize = " << energy_normalize << endl;
+            EV << "Must send to MEC = " << top_task.must_send_MEC << endl;
             // 正規化，重新計算一次正規化過後的cost
             if(cost_car != DBL_MAX)
             {
@@ -841,6 +887,8 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                     std::string s = "myTask_"+ std::to_string(top_task.packet_size);
                     EV << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_UAV_MEC = " << cost_UAV_MEC << endl;
+                    energyComputing += cal_time * parameter.P_car;
+                    EV << myId << ": EnergyComsumption = " << cal_time * parameter.P_car << " / energyComputing = " << energyComputing << endl;
                     cMessage *Task_handlingTimer = new cMessage(s.c_str());
                     selfscheduledMessages.push_back({Task_handlingTimer, cal_time});
 
@@ -850,6 +898,12 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                     CAR_UAV++;
                     EV << myId << ": I find UAV " << candidate_UAV << " to handle my task!"  << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_UAV_MEC = " << cost_UAV_MEC << endl;
+                    double dis_CARtoUAV_x = curPosition.x - UAV_map[candidate_UAV].position.x;
+                    double dis_CARtoUAV_y = curPosition.y - UAV_map[candidate_UAV].position.y;
+                    double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+                    double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + (parameter.E2_car * dis_CARtoUAV)) * top_task.packet_size;
+                    energyCommunication += energy_CARtoUAV;
+                    EV << "(CAR->UAV)Energy in communication = " << energy_CARtoUAV << " / energyCommunication = " << energyCommunication << endl;
                     std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
                     TraCIDemo11pMessage *task_UAV_msg = new TraCIDemo11pMessage;
                     populateWSM(task_UAV_msg);
@@ -867,6 +921,12 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                     // candidate_UAV_MEC指的是負責relay給MEC的UAV的id(因為要先傳給該UAV)
                     EV << myId << " : I find UAV " << candidate_UAV_MEC << " and it is connecting to a Edge Server!" << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_UAV_MEC = " << cost_UAV_MEC << endl;
+                    double dis_CARtoUAV_x = curPosition.x - UAV_map[candidate_UAV_MEC].position.x;
+                    double dis_CARtoUAV_y = curPosition.y - UAV_map[candidate_UAV_MEC].position.y;
+                    double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+                    double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + (parameter.E2_car * dis_CARtoUAV)) * top_task.packet_size;
+                    energyCommunication += energy_CARtoUAV;
+                    EV << "(CAR->UAV)Energy in communication = " << energy_CARtoUAV << " / energyCommunication = " << energyCommunication << endl;
                     std::string s = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
                     TraCIDemo11pMessage *task_MEC_msg = new TraCIDemo11pMessage;
                     populateWSM(task_MEC_msg);
@@ -894,6 +954,12 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                         CAR_UAV++;
                         EV << myId << ": I find UAV " << candidate_UAV << " to handle my task!"  << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                         EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_UAV_MEC = " << cost_UAV_MEC << endl;
+                        double dis_CARtoUAV_x = curPosition.x - UAV_map[candidate_UAV].position.x;
+                        double dis_CARtoUAV_y = curPosition.y - UAV_map[candidate_UAV].position.y;
+                        double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+                        double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + (parameter.E2_car * dis_CARtoUAV)) * top_task.packet_size;
+                        energyCommunication += energy_CARtoUAV;
+                        EV << "(CAR->UAV)Energy in communication = " << energy_CARtoUAV << " / energyCommunication = " << energyCommunication << endl;
                         std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
                         TraCIDemo11pMessage *task_UAV_msg = new TraCIDemo11pMessage;
                         populateWSM(task_UAV_msg);
@@ -910,6 +976,12 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
                         // candidate_UAV_MEC指的是負責relay給MEC的UAV的id(因為要先傳給該UAV)
                         EV << myId << " : I find UAV " << candidate_UAV_MEC << " and it is connecting to a Edge Server!" << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                         EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_UAV_MEC = " << cost_UAV_MEC << endl;
+                        double dis_CARtoUAV_x = curPosition.x - UAV_map[candidate_UAV_MEC].position.x;
+                        double dis_CARtoUAV_y = curPosition.y - UAV_map[candidate_UAV_MEC].position.y;
+                        double dis_CARtoUAV = dis_CARtoUAV_x * dis_CARtoUAV_x + dis_CARtoUAV_y * dis_CARtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+                        double energy_CARtoUAV = (parameter.E1_car + parameter.E3_UAV + (parameter.E2_car * dis_CARtoUAV)) * top_task.packet_size;
+                        energyCommunication += energy_CARtoUAV;
+                        EV << "(CAR->UAV)Energy in communication = " << energy_CARtoUAV << " / energyCommunication = " << energyCommunication << endl;
                         std::string s = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
                         TraCIDemo11pMessage *task_MEC_msg = new TraCIDemo11pMessage;
                         populateWSM(task_MEC_msg);
@@ -926,9 +998,11 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
         else
         {
             PacketLossTime++;
-            averageDelayPercent += 1;
+            CantFindOffload++;
+            averageDelayPercent += 1.0;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
+        EV << "-------------------------" << endl;
     }
     for(const auto &selfscheduledMessage : selfscheduledMessages)
     {
@@ -1040,4 +1114,34 @@ void GHDSFCar::finish()
     EV << "CAR_UAV = " << CAR_UAV << endl;
     EV << "CAR_MEC = " << CAR_MEC << endl;
     EV << "CAR_UAV_MEC = " << CAR_UAV_MEC << endl;
+    EV << "Successed_Car = " << Successed_Car << endl;
+    EV << "Successed_UAV = " << Successed_UAV << endl;
+    EV << "Successed_MEC = " << Successed_MEC << endl;
+    EV << "Can't Find Offload = " << CantFindOffload << endl;
+    EV << "Energy in Computing = " << energyComputing << endl;
+    EV << "Energy in Communication = " << energyCommunication << endl;
+    EV << "Energy in UAV Flying = " << energyFlying << endl;
+    EV << "The size of successful Task = " << taskSize << endl;
+    EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl; // bit/J
+
+    recordScalar("TotalPacket", TotalPacket);
+    recordScalar("Packet loss Time", PacketLossTime);
+    recordScalar("Transmission Successes Time", SuccessedTime);
+    recordScalar("Transmission Rate", TransRate);
+    recordScalar("Packet Loss Rate", PacketLossRate);
+    recordScalar("averageDelayPercent", (averageDelayPercent / (SuccessedTime + PacketLossTime)));
+    recordScalar("CAR_SELF", CAR_SELF);
+    recordScalar("CAR_UAV", CAR_UAV);
+    recordScalar("CAR_MEC", CAR_MEC);
+    recordScalar("CAR_UAV_MEC", CAR_UAV_MEC);
+    recordScalar("Successed_Car", Successed_Car);
+    recordScalar("Successed_UAV", Successed_UAV);
+    recordScalar("Successed_MEC", Successed_MEC);
+    recordScalar("Successed_UAV_MEC", Successed_UAV_MEC);
+    recordScalar("Can't Find Offload", CantFindOffload);
+    recordScalar("EnergyComputing", energyComputing);
+    recordScalar("EnergyCommunication", energyCommunication);
+    recordScalar("EnergyFlying", energyFlying);
+    recordScalar("taskSize", taskSize);
+    recordScalar("energyEfficiency", taskSize * 8 / (energyComputing + energyCommunication + energyFlying));
 }

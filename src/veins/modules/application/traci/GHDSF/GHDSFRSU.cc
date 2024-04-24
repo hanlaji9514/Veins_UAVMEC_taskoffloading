@@ -240,6 +240,8 @@ void GHDSFRSU::handleReceivedTask()
             std::string s = "Task_" + std::to_string(top_task.source_id) + "_" + std::to_string(top_task.packet_size);
             EV << "RSU " << myId << ": handling the task! Handling time = " << cal_time << " / handle size = " << top_task.packet_size << " / full packet size = " << top_task.full_packet_size << " / remain cpu = " << RSU_resource.remain_cpu << " remain memory = " << RSU_resource.remain_memory << endl;
             RSU_resource.handling_tasks.push_back(top_task);
+            energyComputing += cal_time * parameter.P_MEC;
+            EV << "RSU " << myId << ": EnergyComsumption = " << cal_time * parameter.P_MEC << " / energyComputing = " << energyComputing << endl;
             cMessage *Task_handlingTimer = new cMessage(s.c_str());
             scheduleAt(simTime() + cal_time, Task_handlingTimer);
         }

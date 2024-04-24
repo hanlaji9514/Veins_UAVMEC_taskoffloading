@@ -54,6 +54,8 @@ struct LAB_par
     double P_UAV;
     double P_MEC;
 
+    double Energy_perMeter; // 無人機每移動一個單位所需耗能(J)
+
     double DelayRatio;
     double EnergyRatio;
 
@@ -73,6 +75,7 @@ struct task
     int qos;
     double start_time;
     double expire_time;
+    bool must_send_MEC;
 
     task(int q); // 定義在MyTest11p.cc中
 };
@@ -87,7 +90,14 @@ extern double MEC_cal_capability;
 
 extern int Successed_Car;
 extern int Successed_UAV;
+extern int Successed_UAV_MEC;
 extern int Successed_MEC;
+extern int CantFindOffload;
+
+extern long long taskSize;
+extern long double energyComputing;
+extern long double energyCommunication;
+extern long double energyFlying;
 
 extern int CAR_SELF;
 extern int CAR_UAV;

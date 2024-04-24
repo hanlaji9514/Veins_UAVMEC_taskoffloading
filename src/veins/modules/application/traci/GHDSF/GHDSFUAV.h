@@ -55,7 +55,7 @@ struct UAV_resource
 {
     int remain_cpu;
     int remain_memory;
-    double cal_capability = 1000000;
+    double cal_capability = 1250000;
     double following_speed;
     double following_speed_1;
     double following_speed_2;
@@ -88,9 +88,11 @@ public:
     std::map<LAddress::L2Type, MEC_MapData> MEC_map;
     GHDSFUAV();
     void handleReceivedTask();
+    void computeFlyingEnergy();
     double Delay_to_MEC = DBL_MAX;
     LAddress::L2Type Nearest_MEC = -1;
     double Distance_to_MEC = -1;
+    Coord lastCoord = Coord(0,0,0);
     Coord MEC_Position = Coord(0,0,0);
 
 protected:
