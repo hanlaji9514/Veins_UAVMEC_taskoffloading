@@ -497,135 +497,6 @@ void MyMethodCar::clearExpiredTask() // 在node離開地圖前，刪除已過期
     }
 }
 
-void MyMethodCar::CoCaCoTaskOffloading()
-{
-    std::vector<ScheduledMessage> selfscheduledMessages;
-    clearExpiredTask();
-    int loop_time = node_resource.pending_tasks.size();
-    for(int i=0; i<loop_time; i++)
-    {
-        task top_task = node_resource.pending_tasks.front();
-        node_resource.pending_tasks.pop();
-        EV << myId << " : expire time =  " << top_task.expire_time << ", Nearest_MEC = " << Nearest_MEC << endl;
-        if(top_task.expire_time > simTime().dbl())
-        {
-            if(!UAV_map.empty())
-            {
-                double minDelay = std::numeric_limits<double>::max(); // 初始化為最大值
-                LAddress::L2Type minDelayUAV;
-                for(const auto& UAV_in_my_Area : UAV_map)
-                {
-                    if(UAV_in_my_Area.second.Delay < minDelay)
-                    {
-                        minDelay = UAV_in_my_Area.second.Delay;
-                        minDelayUAV = UAV_in_my_Area.first;
-                    }
-                }
-                // 現在，minDelayUAV 是 Delay 最小的 UAV 的地址
-                UAV_MapData minDelayUAV_in_my_Area = UAV_map[minDelayUAV]; // 找到delay最小的UAV
-                if(minDelayUAV_in_my_Area.Delay_to_MEC != -1) // Delay最小的UAV有和MEC連線 => 任務分為車輛、UAV、MEC計算
-                {
-                    CAR_UAV_MEC++;
-                    // 注意MEC任務傳輸路徑：車輛->UAV->MEC
-                    EV << myId << ": handle the task by myself and UAV and MEC(CAR->UAV->MEC)! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 3 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-                    node_resource.waiting_tasks.push_back({top_task, 6}); // 將任務放進等待任務欄中，6代表車輛(1)運算+UAV(2)運算+MEC(3)運算
-                    node_resource.queuing_tasks.push({top_task, top_task.packet_size / 3}); // 將車輛需要自己算的部分packet size放入
-                    EV << myId << ": Send a task to UAV " << minDelayUAV << ", a part handle by UAV and another part need to relay to MEC, full packet size = " << top_task.packet_size << ", handle size = " << top_task.packet_size / 3 << endl;
-                    std::string s1 = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
-                    TraCIDemo11pMessage *task_UAV_MEC_msg = new TraCIDemo11pMessage;
-                    populateWSM(task_UAV_MEC_msg);
-                    task_UAV_MEC_msg->setByteLength((top_task.packet_size / 3) * 2);
-                    task_UAV_MEC_msg->setSenderAddress(myId);
-                    task_UAV_MEC_msg->setRecipientAddress(minDelayUAV);
-                    task_UAV_MEC_msg->setName(s1.c_str());
-                    sendDown(task_UAV_MEC_msg);
-
-                }
-                else // Delay最小的UAV沒有和MEC連線
-                {
-                    if(Nearest_MEC != -1) // UAV沒和MEC連線，車輛自己有和MEC連線 => 任務分為車輛、UAV、MEC計算
-                    {
-                        CAR_UAV_MEC++;
-                        // 注意MEC任務傳輸路徑：車輛->MEC
-                        EV << myId << ": handle the task by myself and UAV and MEC(CAR->MEC)! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 3 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-                        node_resource.waiting_tasks.push_back({top_task, 6}); // 將任務放進等待任務欄中，6代表車輛(1)運算+UAV(2)運算+MEC(3)運算
-                        node_resource.queuing_tasks.push({top_task, top_task.packet_size / 3}); // 將車輛需要自己算的部分packet size放入
-                        EV << myId << ": Send a task to UAV " << minDelayUAV << ", full packet size = " << top_task.packet_size << ", handle size = " << top_task.packet_size / 3 << endl;
-                        std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
-                        TraCIDemo11pMessage *task_UAV_msg = new TraCIDemo11pMessage;
-                        populateWSM(task_UAV_msg);
-                        task_UAV_msg->setByteLength(top_task.packet_size / 3);
-                        task_UAV_msg->setSenderAddress(myId);
-                        task_UAV_msg->setRecipientAddress(minDelayUAV);
-                        task_UAV_msg->setName(s.c_str());
-                        sendDown(task_UAV_msg);
-                        EV << myId << ": Send a task to MEC " << Nearest_MEC << ", full packet size = " << top_task.packet_size << ", handle size = " << top_task.packet_size / 3 << endl;
-                        std::string s1 = "Car_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
-                        TraCIDemo11pMessage *task_CartoMEC_msg = new TraCIDemo11pMessage;
-                        populateWSM(task_CartoMEC_msg);
-                        task_CartoMEC_msg->setByteLength(top_task.packet_size / 3);
-                        task_CartoMEC_msg->setSenderAddress(myId);
-                        task_CartoMEC_msg->setRecipientAddress(Nearest_MEC);
-                        task_CartoMEC_msg->setName(s1.c_str());
-                        sendDown(task_CartoMEC_msg);
-                    }
-                    else // UAV沒和MEC連線，車輛自己也沒和MEC連線 => 任務分為車輛和UAV計算
-                    {
-                        CAR_UAV++;
-                        EV << myId << ": handle the task by myself and UAV! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 2 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-                        node_resource.waiting_tasks.push_back({top_task, 3}); // 將任務放進等待任務欄中，3代表車輛(1)運算+UAV(2)運算
-                        node_resource.queuing_tasks.push({top_task, top_task.packet_size / 2}); // 將車輛需要自己算的部分packet size放入
-                        EV << myId << ": Send a task to UAV " << minDelayUAV << ", full packet size = " << top_task.packet_size << ", handle size = " << top_task.packet_size / 2 << endl;
-                        std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
-                        TraCIDemo11pMessage *task_UAV_msg = new TraCIDemo11pMessage;
-                        populateWSM(task_UAV_msg);
-                        task_UAV_msg->setByteLength(top_task.packet_size / 2);
-                        task_UAV_msg->setSenderAddress(myId);
-                        task_UAV_msg->setRecipientAddress(minDelayUAV);
-                        task_UAV_msg->setName(s.c_str());
-                        sendDown(task_UAV_msg);
-                    }
-                }
-            }
-            else
-            {
-                if(Nearest_MEC != -1) // 車輛沒連線UAV、但是有連線MEC => 任務分為車輛和MEC計算
-                {
-                    CAR_MEC++;
-                    EV << myId << ": handle the task by myself and MEC! " << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size / 2 << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-                    node_resource.waiting_tasks.push_back({top_task, 4}); // 將任務放進等待任務欄中，4代表車輛運算+MEC運算
-                    node_resource.queuing_tasks.push({top_task, top_task.packet_size / 2}); // 將車輛需要自己算的部分packet size放入
-                    EV << myId << ": Send a task to MEC " << Nearest_MEC << ", full packet size = " << top_task.packet_size << ", handle size = " << top_task.packet_size / 2 << endl;
-                    std::string s = "Car_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory) + "_" + std::to_string(top_task.packet_size);
-                    TraCIDemo11pMessage *task_CartoMEC_msg = new TraCIDemo11pMessage;
-                    populateWSM(task_CartoMEC_msg);
-                    task_CartoMEC_msg->setByteLength(top_task.packet_size / 2);
-                    task_CartoMEC_msg->setSenderAddress(myId);
-                    task_CartoMEC_msg->setRecipientAddress(Nearest_MEC);
-                    task_CartoMEC_msg->setName(s.c_str());
-                    sendDown(task_CartoMEC_msg);
-                }
-                else // 車輛沒連線UAV也沒連線MEC => 車輛自行運算
-                {
-
-                    CAR_SELF++;
-                    EV << myId << ": handle the task by myself!" << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-                    node_resource.waiting_tasks.push_back({top_task, 1}); // 將任務放進等待任務欄中，1代表只有車輛運算
-                    node_resource.queuing_tasks.push({top_task, top_task.packet_size}); // 將車輛需要自己算的部分packet size放入
-                }
-            }
-        }
-        else
-        {
-            PacketLossTime++;
-            CantFindOffload++;
-            averageDelayPercent += 1.0;
-            EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
-        }
-    }
-    handleQueuingTask();
-}
-
 void MyMethodCar::handleQueuingTask()
 {
     std::vector<ScheduledMessage> selfscheduledMessages;
@@ -832,7 +703,7 @@ void MyMethodCar::dispatchTaskConsiderEnergy()
                     EV << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory  << " / must_send_MEC = " << top_task.must_send_MEC  << endl;
                     EV << "cost_CAR = " << cost_car << " / cost_UAV = " << cost_UAV << " / cost_UAV_MEC = " << cost_UAV_MEC << " / cost_MEC = " << cost_MEC << endl;
                     energyComputing += cal_time * parameter.P_car;
-                    EV << myId << ": EnergyComsumption = " << cal_time * parameter.P_car << " / energyComputing = " << energyComputing << endl;
+                    EV << myId << ": EnergyComsumption = " << cal_time * parameter.P_car << " / energying = " << energyComputing << endl;
                     cMessage *Task_handlingTimer = new cMessage(s.c_str());
                     selfscheduledMessages.push_back({Task_handlingTimer, cal_time});
 
@@ -1071,89 +942,6 @@ void MyMethodCar::dispatchTaskConsiderEnergy()
     }
 }
 
-
-/*void CoCaCoCar::dispatchTask()
-{
-    std::vector<ScheduledMessage> selfscheduledMessages;
-    int loop_time = node_resource.pending_tasks.size();
-    for(int i=0; i<loop_time; i++)
-    {
-        task top_task = node_resource.pending_tasks.front();
-        node_resource.pending_tasks.pop();
-        if(top_task.expire_time > simTime().dbl()) // 任務尚未過期，嘗試決定任務要怎麼offload
-        {
-            if(node_resource.remain_cpu >= top_task.require_cpu && node_resource.remain_memory >= top_task.require_memory && top_task.packet_size <= 12750) // 車輛自行處理
-            {
-                double cal_time = top_task.packet_size / (node_resource.cal_capability * top_task.require_cpu / 100.0);
-                node_resource.remain_cpu -= top_task.require_cpu;
-                node_resource.remain_memory -= top_task.require_memory;
-                node_resource.handling_tasks.push_back(top_task);
-                std::string s = "myTask_"+ std::to_string(top_task.packet_size);
-                EV << myId << ": handling the task! Handling time = " << cal_time << " / size = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
-                cMessage *Task_handlingTimer = new cMessage(s.c_str());
-                selfscheduledMessages.push_back({Task_handlingTimer, cal_time});
-            }
-            else
-            {
-                if(!UAV_map.empty())
-                {
-                    for(auto UAV_in_my_Area : UAV_map)
-                    {
-                        if(top_task.require_cpu <= UAV_in_my_Area.second.remain_cpu && top_task.require_memory <= UAV_in_my_Area.second.remain_memory && UAV_in_my_Area.second.Delay_to_MEC == -1)
-                        {
-                            EV << myId << ": I find UAV " << UAV_in_my_Area.first << " to handle my task!" << endl;
-                            std::string s = "UAV_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
-                            TraCIDemo11pMessage *task_UAV_msg = new TraCIDemo11pMessage;
-                            populateWSM(task_UAV_msg);
-                            task_UAV_msg->setByteLength(top_task.packet_size);
-                            task_UAV_msg->setSenderAddress(myId);
-                            task_UAV_msg->setRecipientAddress(UAV_in_my_Area.first);
-                            task_UAV_msg->setName(s.c_str());
-                            sendDown(task_UAV_msg);
-                            node_resource.waiting_tasks.push_back(top_task);
-                            break;
-                        }
-                        else if(UAV_in_my_Area.second.Delay_to_MEC != -1)
-                        {
-                            EV << myId << " : I find UAV " << UAV_in_my_Area.first << " and it is connecting to a Edge Server!" << endl;
-                            std::string s = "UAV_MEC_handle_" + std::to_string(top_task.require_cpu) + "_" + std::to_string(top_task.require_memory);
-                            TraCIDemo11pMessage *task_MEC_msg = new TraCIDemo11pMessage;
-                            populateWSM(task_MEC_msg);
-                            task_MEC_msg->setByteLength(top_task.packet_size);
-                            task_MEC_msg->setSenderAddress(myId);
-                            task_MEC_msg->setRecipientAddress(UAV_in_my_Area.first);
-                            task_MEC_msg->setName(s.c_str());
-                            sendDown(task_MEC_msg);
-                            node_resource.waiting_tasks.push_back(top_task);
-                            break;
-                        }
-                        else
-                        {
-                            EV << myId << " : I find UAV " << UAV_in_my_Area.first << " in my area, but it isn't available!" << endl;
-                            node_resource.pending_tasks.push(top_task);
-                        }
-
-                    }
-                }
-                else
-                {
-                    EV << myId << " : No UAV in my area to help me!" << endl;
-                    node_resource.pending_tasks.push(top_task);
-                }
-            }
-        }
-        else
-        {
-            PacketLossTime++;
-            EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
-        }
-    }
-    for(const auto &selfscheduledMessage : selfscheduledMessages)
-    {
-        scheduleAt(simTime() + selfscheduledMessage.cal_time, selfscheduledMessage.msg);
-    }
-}*/
-
 void MyMethodCar::handlePositionUpdate(cObject* obj)
 {
     DemoBaseApplLayer::handlePositionUpdate(obj);
@@ -1180,11 +968,20 @@ void MyMethodCar::finish()
     EV << "Successed_MEC = " << Successed_MEC << endl;
     EV << "Successed_UAV_MEC = " << Successed_UAV_MEC << endl;
     EV << "Can't Find Offload = " << CantFindOffload << endl;
+    EV << "Total Energy Consumption = " << energyComputing + energyCommunication + energyFlying << endl; // J
     EV << "Energy in Computing = " << energyComputing << endl;
     EV << "Energy in Communication = " << energyCommunication << endl;
     EV << "Energy in UAV Flying = " << energyFlying << endl;
     EV << "The size of successful Task = " << taskSize << endl;
     EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl; // bit/J
+
+    EV << TransRate << endl;
+    EV << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
+    EV << energyComputing + energyCommunication + energyFlying << endl;
+    EV << energyComputing << endl;
+    EV << energyCommunication << endl;
+    EV << energyFlying << endl;
+    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl;
 
     recordScalar("TotalPacket", TotalPacket);
     recordScalar("Packet loss Time", PacketLossTime);

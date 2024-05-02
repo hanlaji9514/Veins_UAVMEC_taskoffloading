@@ -89,7 +89,6 @@ public:
     MyMethodCar();
     void dispatchTask();
     void dispatchTaskConsiderEnergy();
-    void CoCaCoTaskOffloading();
     void handleQueuingTask();
     void clearExpiredTask();
     LAddress::L2Type Nearest_MEC = -1;

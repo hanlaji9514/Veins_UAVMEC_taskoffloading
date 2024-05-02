@@ -87,7 +87,7 @@ task::task (int q)
         rnd = 100;
     int packet_rnd = rand() % 100;
     int MEC_rnd = rand() % 100;
-    if(MEC_rnd <= 40)
+    if(MEC_rnd < 70)
         must_send_MEC = true;
     else
         must_send_MEC = false;
@@ -1118,11 +1118,20 @@ void GHDSFCar::finish()
     EV << "Successed_UAV = " << Successed_UAV << endl;
     EV << "Successed_MEC = " << Successed_MEC << endl;
     EV << "Can't Find Offload = " << CantFindOffload << endl;
+    EV << "Total Energy Consumption = " << energyComputing + energyCommunication + energyFlying << endl; // J
     EV << "Energy in Computing = " << energyComputing << endl;
     EV << "Energy in Communication = " << energyCommunication << endl;
     EV << "Energy in UAV Flying = " << energyFlying << endl;
     EV << "The size of successful Task = " << taskSize << endl;
     EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl; // bit/J
+
+    EV << TransRate << endl;
+    EV << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
+    EV << energyComputing + energyCommunication + energyFlying << endl;
+    EV << energyComputing << endl;
+    EV << energyCommunication << endl;
+    EV << energyFlying << endl;
+    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl;
 
     recordScalar("TotalPacket", TotalPacket);
     recordScalar("Packet loss Time", PacketLossTime);

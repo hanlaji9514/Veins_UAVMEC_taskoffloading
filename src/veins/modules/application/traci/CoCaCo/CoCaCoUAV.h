@@ -89,10 +89,12 @@ public:
     std::map<LAddress::L2Type, MEC_MapData> MEC_map;
     CoCaCoUAV();
     void handleReceivedTask();
+    void computeFlyingEnergy();
     double Delay_to_MEC = DBL_MAX;
     LAddress::L2Type Nearest_MEC = -1;
     double Distance_to_MEC = -1;
     Coord MEC_Position = Coord(0,0,0);
+    Coord lastCoord = Coord(0,0,0);
 
 protected:
     simtime_t lastDroveAt;

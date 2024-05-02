@@ -27,6 +27,8 @@
 
 #include "veins/modules/messages/BeaconMessage_m.h"
 
+#include "veins/modules/application/traci/common.h" // 所有全域變數宣告在common.h中，並在GHDSFCar.cc中定義
+
 using namespace veins;
 
 Define_Module(veins::CoCaCoUAV);
@@ -46,7 +48,7 @@ void CoCaCoUAV::initialize(int stage)
         UAV_resource.following = false;
 
         cMessage *resourceMsg = new cMessage("check_resource");
-        scheduleAt(simTime() + 0.1, resourceMsg);
+        scheduleAt(simTime() + 0.5, resourceMsg);
         cMessage *beaconTimer = new cMessage("beacon");
         scheduleAt(simTime() + 0.05, beaconTimer);
     }
@@ -124,6 +126,10 @@ void CoCaCoUAV::onWSM(BaseFrame1609_4* frame)
         EV << "UAV " << myId << ": received the task request from " << wsm->getSenderAddress() << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() / 2 << endl;
         EV << "UAV " << myId << ": Relaying the task from car " << wsm->getSenderAddress() << " to MEC " << Nearest_MEC << ", full packet size = " << received_t.full_packet_size << " and the handle size = " << wsm->getByteLength() / 2 << endl;
 
+        double energy_UAVtoMEC = (parameter.E1_UAV + parameter.E3_MEC + (parameter.E2_UAV * Distance_to_MEC * Distance_to_MEC)) * received_t.packet_size;
+        energyCommunication += energy_UAVtoMEC;
+        EV << "(UAV->MEC)Energy in communication = " << energy_UAVtoMEC << " / energyCommunication = " << energyCommunication << endl;
+
         std::string s = std::string(wsm->getName()).substr(4) + "_" + std::to_string(wsm->getSenderAddress());
         TraCIDemo11pMessage *SendtoMEC = new TraCIDemo11pMessage;
         populateWSM(SendtoMEC);
@@ -140,6 +146,12 @@ void CoCaCoUAV::onWSM(BaseFrame1609_4* frame)
     {
         int Back_FullPacketSize = std::stoi(std::string(wsm->getName()).substr(16));
         EV << myId << ": Received the finished task from MEC " << wsm->getSenderAddress() << ", and need to send back to the car, the Full packet size = " << Back_FullPacketSize << endl;
+        double dis_MECtoUAV_x = curPosition.x - wsm->getSenderPosition().x;
+        double dis_MECtoUAV_y = curPosition.y - wsm->getSenderPosition().y;
+        double dis_MECtoUAV = dis_MECtoUAV_x * dis_MECtoUAV_x + dis_MECtoUAV_y * dis_MECtoUAV_y; //距離原本應該要開根號，但是在耗能部分距離越長耗能設定為平方成長，故這邊就直接用
+        double energy_MECtoUAV = (parameter.E1_MEC + parameter.E3_UAV + (parameter.E2_MEC * dis_MECtoUAV)) * wsm->getByteLength();
+        energyCommunication += energy_MECtoUAV;
+        EV << "(MEC->UAV)Energy in communication = " << energy_MECtoUAV << " / energyCommunication = " << energyCommunication << endl;
         for(auto it = UAV_resource.waiting_tasks.begin(); it != UAV_resource.waiting_tasks.end();)
         {
             EV << "waiting task full size = " << it->full_packet_size << " / back full packet size = " << Back_FullPacketSize << endl;
@@ -148,6 +160,7 @@ void CoCaCoUAV::onWSM(BaseFrame1609_4* frame)
                 std::string s = "MEC_UAV_TaskSendBack_" + std::to_string(it->full_packet_size);
                 TraCIDemo11pMessage *SendBacktoNode = new TraCIDemo11pMessage;
                 populateWSM(SendBacktoNode);
+                SendBacktoNode->setSenderPosition(curPosition);
                 SendBacktoNode->setByteLength(wsm->getByteLength());
                 SendBacktoNode->setSenderAddress(myId);
                 SendBacktoNode->setRecipientAddress(it->id);
@@ -341,6 +354,7 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
                 std::string s = "TaskSendBack_" + std::to_string(it->full_packet_size);
                 TraCIDemo11pMessage *SendBack = new TraCIDemo11pMessage;
                 populateWSM(SendBack);
+                SendBack->setSenderPosition(curPosition);
                 SendBack->setByteLength(it->full_packet_size);
                 SendBack->setSenderAddress(myId);
                 SendBack->setRecipientAddress(it->id);
@@ -388,9 +402,12 @@ void CoCaCoUAV::handleSelfMsg(cMessage* msg)
             LAddress::L2Type key = pair.first;
             EV << " Key: " << key << ", Generation time: " << pair.second.generate_time << ", Delay to MEC: " << pair.second.Delay_to_MEC << endl;
         }
+
+        computeFlyingEnergy();
+
         delete msg;
         cMessage *resourceMsg = new cMessage("check_resource");
-        scheduleAt(simTime() + 0.1, resourceMsg);
+        scheduleAt(simTime() + 0.5, resourceMsg);
     }
 }
 
@@ -409,6 +426,8 @@ void CoCaCoUAV::handleReceivedTask()
             std::string s = "Task_" + std::to_string(top_task.id) + "_" + std::to_string(top_task.packet_size);
             EV << "UAV " << myId << ": handling the task! Handling time = " << cal_time << " / handle size = " << top_task.packet_size << " / Full packet size = " << top_task.full_packet_size << " / remain cpu = " << UAV_resource.remain_cpu << " remain memory = " << UAV_resource.remain_memory << endl;
             UAV_resource.handling_tasks.push_back(top_task);
+            energyComputing += cal_time * parameter.P_UAV;
+            EV << "UAV " << myId << ": EnergyComsumption = " << cal_time * parameter.P_UAV << " / energyComputing = " << energyComputing << endl;
             cMessage *Task_handlingTimer = new cMessage(s.c_str());
             scheduleAt(simTime() + cal_time, Task_handlingTimer);
         }
@@ -444,6 +463,20 @@ void CoCaCoUAV::handleReceivedTask()
     bsm->setRemain_mem(UAV_resource.remain_memory);
     sendDown(bsm);
 
+}
+
+void CoCaCoUAV::computeFlyingEnergy()
+{
+    if(lastCoord == Coord(0,0,0))
+        lastCoord = curPosition;
+    Coord nowCoord = curPosition;
+    double Dis_x = nowCoord.x - lastCoord.x;
+    double Dis_y = nowCoord.y - lastCoord.y;
+    EV << "Dis_x = " << Dis_x << " / Dis_y = " << Dis_y << endl;
+    double movingDistance = sqrt(Dis_x * Dis_x + Dis_y * Dis_y);
+    energyFlying += parameter.Energy_perMeter * movingDistance;
+    EV << "UAV " << myId << ": lastCoord = " << lastCoord << " / nowCoord = " << nowCoord << " / movingDistance = " << movingDistance << endl;
+    lastCoord = nowCoord;
 }
 
 void CoCaCoUAV::handlePositionUpdate(cObject* obj)
