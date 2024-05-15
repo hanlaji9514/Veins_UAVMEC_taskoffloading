@@ -87,7 +87,7 @@ task::task (int q)
         rnd = 100;
     int packet_rnd = rand() % 100;
     int MEC_rnd = rand() % 100;
-    if(MEC_rnd < 70)
+    if(MEC_rnd < 0)
         must_send_MEC = true;
     else
         must_send_MEC = false;
@@ -577,6 +577,21 @@ void GHDSFCar::clearExpiredTask() // 在node離開地圖前，刪除已過期的
             continue;
         }
         ++it;  // 如果當前元素不符合條件，則遞增迭代器
+    }
+    int loop_time = node_resource.pending_tasks.size();
+    for(int i=0; i<loop_time; i++)
+    {
+        task top_task = node_resource.pending_tasks.front();
+        node_resource.pending_tasks.pop();
+        if (top_task.expire_time < simTime().dbl())
+        {
+            PacketLossTime++;
+            CantFindOffload++;
+            averageDelayPercent += 1.0;
+            EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
+        }
+        else
+            node_resource.pending_tasks.push(top_task);
     }
 }
 

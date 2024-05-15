@@ -376,6 +376,7 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
                             else
                             {
                                 SuccessedTime++;
+                                Successed_Car++;
                                 averageDelayPercent += (1.0 - (it2->first.expire_time - simTime().dbl()) / it2->first.delay_limit);
                                 taskSize += it2->first.packet_size;
                                 EV << myId << ": Full packet Size = " << it2->first.packet_size << " : handling success!" << " Success Time : " << SuccessedTime << endl;
@@ -469,6 +470,37 @@ void CoCaCoCar::clearExpiredTask()
             continue;
         }
         ++it;  // 如果當前元素不符合條件，則遞增迭代器
+    }
+    int loop_time = node_resource.pending_tasks.size();
+    for(int i=0; i<loop_time; i++)
+    {
+        task top_task = node_resource.pending_tasks.front();
+        node_resource.pending_tasks.pop();
+        if (top_task.expire_time < simTime().dbl())
+        {
+            PacketLossTime++;
+            CantFindOffload++;
+            averageDelayPercent += 1.0;
+            EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
+        }
+        else
+            node_resource.pending_tasks.push(top_task);
+    }
+    loop_time = node_resource.queuing_tasks.size();
+    for(int i=0; i<loop_time; i++)
+    {
+        task top_task = node_resource.queuing_tasks.front().first;
+        int compute_size = node_resource.queuing_tasks.front().second;
+        node_resource.queuing_tasks.pop();
+        if (top_task.expire_time < simTime().dbl())
+        {
+            PacketLossTime++;
+            CantFindOffload++;
+            averageDelayPercent += 1.0;
+            EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
+        }
+        else
+            node_resource.queuing_tasks.push({top_task, compute_size});
     }
 }
 
@@ -581,6 +613,10 @@ void CoCaCoCar::CoCaCoTaskOffloading()
                         task_UAV_msg->setName(s.c_str());
                         sendDown(task_UAV_msg);
                     }
+                    else
+                    {
+                        node_resource.pending_tasks.push(top_task);
+                    }
                 }
             }
             else
@@ -610,6 +646,10 @@ void CoCaCoCar::CoCaCoTaskOffloading()
                     EV << myId << ": handle the task by myself!" << " Packet size = " << top_task.packet_size << " / handle size by car = " << top_task.packet_size << " / remain cpu = " << node_resource.remain_cpu << " remain memory = " << node_resource.remain_memory << endl;
                     node_resource.waiting_tasks.push_back({top_task, 1}); // 將任務放進等待任務欄中，1代表只有車輛運算
                     node_resource.queuing_tasks.push({top_task, top_task.packet_size}); // 將車輛需要自己算的部分packet size放入
+                }
+                else
+                {
+                    node_resource.pending_tasks.push(top_task);
                 }
             }
         }
