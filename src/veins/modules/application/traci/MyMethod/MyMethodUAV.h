@@ -56,7 +56,7 @@ struct UAV_resource
 {
     int remain_cpu;
     int remain_memory;
-    double cal_capability = 1000000;
+    double cal_capability = 1500000;
     double following_speed;
     double following_speed_1;
     double following_speed_2;

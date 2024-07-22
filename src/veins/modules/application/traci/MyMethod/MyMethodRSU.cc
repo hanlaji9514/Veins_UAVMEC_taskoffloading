@@ -34,6 +34,7 @@ using namespace veins;
 
 std::unordered_map<LAddress::L2Type, Car_info> Car_map;
 std::unordered_map<LAddress::L2Type, UAV_info> UAV_maps;
+LAddress::L2Type main_MEC = INT_MAX;
 std::unordered_map<LAddress::L2Type, Coord> Dispatch_Coord;
 std::vector<Cluster> all_clusters;
 std::vector<std::vector<double>> hungarian_weight;
@@ -50,6 +51,21 @@ void MyMethodRSU::initialize(int stage)
         sentMessage = false;
         lastDroveAt = simTime();
         currentSubscribedServiceId = -1;
+
+        cMessage *checkcarMsg = new cMessage("check_car");
+        scheduleAt(simTime() + 0.5, checkcarMsg);
+        cMessage *beaconTimer = new cMessage("beacon");
+        scheduleAt(simTime() + 0.1, beaconTimer);
+    }
+    else if(stage == 1)
+    {
+        EV << "I'm MEC " << myId << endl;
+        if(myId < main_MEC)
+        {
+
+            main_MEC = myId;
+            EV << "MEC " << myId << ", I'm the main MEC!" << endl;
+        }
         canvas = getParentModule()->getCanvas();
         if (canvas)
         {
@@ -59,10 +75,6 @@ void MyMethodRSU::initialize(int stage)
         {
             EV << "Canvas is not available." << endl;
         }
-        cMessage *checkcarMsg = new cMessage("check_car");
-        scheduleAt(simTime() + 0.5, checkcarMsg);
-        cMessage *beaconTimer = new cMessage("beacon");
-        scheduleAt(simTime() + 0.1, beaconTimer);
     }
 }
 
@@ -215,7 +227,7 @@ void MyMethodRSU::handleSelfMsg(cMessage* msg)
         if(!RSU_resource.pending_tasks.empty())
             handleReceivedTask();
     }
-    else if(!strcmp(msg->getName(), "check_car"))
+    else if(!strcmp(msg->getName(), "check_car") && myId == main_MEC)
     {
         EV << "MEC " << myId << ": All car in the map" << endl;
         for (const auto& car : Car_map)
@@ -524,11 +536,13 @@ void MyMethodRSU::compute_hungarian_weight()
         }
         for(LAddress::L2Type UAVid : UAV_id)
         {
+            double resource_weight = 0.5;
+            double capability_weight = 1.0 - resource_weight;
             auto UAVinfo = UAV_maps[UAVid];
             // 先將UAV的計算能力做normalize
-            double status = 0.5 * ((UAVinfo.remain_cpu+UAVinfo.remain_mem) / max_resource) + 0.5 * ((UAVinfo.cal_capability) / max_calculate);
-            double c = all_clusters[i].Total_task / status; // 運算成本(目前CPU,MEM資源越多、UAV運算能力越強的成本越低)
-            EV << "Task in Cluster: " << all_clusters[i].Total_task << " / remain_cpu = " << UAVinfo.remain_cpu << " remain_mem = " << UAVinfo.remain_mem << " / UAV_status : " << status << " / calculate_cost : " << c << endl;
+            double status = resource_weight * ((UAVinfo.remain_cpu+UAVinfo.remain_mem) / max_resource) + capability_weight * ((UAVinfo.cal_capability) / max_calculate);
+            double c = all_clusters[i].CarInCluster.size() / status; // 運算成本(目前CPU,MEM資源越多、UAV運算能力越強的成本越低)
+            EV << "Car in this Cluster = " << all_clusters[i].CarInCluster.size() << " / Task in Cluster: " << all_clusters[i].Total_task << " / remain_cpu = " << UAVinfo.remain_cpu << " remain_mem = " << UAVinfo.remain_mem << " / UAV capability = " << UAVinfo.cal_capability << " / UAV_status : " << status << " / calculate_cost : " << c << endl;
             calculate.push_back(c);
         }
 

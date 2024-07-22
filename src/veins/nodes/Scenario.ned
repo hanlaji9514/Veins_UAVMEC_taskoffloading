@@ -39,28 +39,28 @@ network Scenario
         @display("bgb=$playgroundSizeX,$playgroundSizeY");
     submodules:
         obstacles: ObstacleControl {
-            @display("p=240,50");
+            @display("p=4000,4000");
         }
         annotations: AnnotationManager {
-            @display("p=260,50");
+            @display("p=4000,4000");
         }
         connectionManager: ConnectionManager {
             parameters:
-                @display("p=150,0;i=abstract/multicast");
+                @display("p=4000,0;i=abstract/multicast");
         }
         world: BaseWorldUtility {
             parameters:
                 playgroundSizeX = veins_eval_by_version(veins_omnetpp_buildnum(), "playgroundSizeX", 1525, "parent.playgroundSizeX");
                 playgroundSizeY = veins_eval_by_version(veins_omnetpp_buildnum(), "playgroundSizeY", 1525, "parent.playgroundSizeY");
                 playgroundSizeZ = veins_eval_by_version(veins_omnetpp_buildnum(), "playgroundSizeZ", 1525, "parent.playgroundSizeZ");
-                @display("p=30,0;i=misc/globe");
+                @display("p=4000,4000;i=misc/globe");
         }
         manager: TraCIScenarioManagerLaunchd {
             parameters:
-                @display("p=512,128");
+                @display("p=4000,4000");
         }
         roadsCanvasVisualizer: RoadsCanvasVisualizer {
-            @display("p=300,0");
+            @display("p=4000,4000");
         }
         node[0]: Car {
         }

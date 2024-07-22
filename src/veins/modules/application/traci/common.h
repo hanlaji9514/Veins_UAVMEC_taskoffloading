@@ -59,8 +59,8 @@ struct LAB_par
     double DelayRatio;
     double EnergyRatio;
 
-    double DistanceRatio;
     double CalculateRatio;
+    double DistanceRatio;
 };
 extern LAB_par parameter;
 

@@ -294,13 +294,13 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
 {
     if(!strcmp(msg->getName(), "generate_task"))
     {
-        int numtasks = intuniform(3,8);
+        int numtasks = intuniform(10,18);
         TotalPacket += numtasks;
         Car_map[myId].Num_Task += numtasks;
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
-            if (task_p >= 1 && task_p <= 20) // 使用if-else來判斷範圍
+            if (task_p >= 1 && task_p <= 15) // 使用if-else來判斷範圍(20)
             {
                 task t(1);
                 t.id = myId;
@@ -308,7 +308,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            else if (task_p >= 21 && task_p <= 45)
+            else if (task_p >= 16 && task_p <= 30)//(25)
             {
                 task t(2);
                 t.id = myId;
@@ -316,7 +316,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            else if (task_p >= 46 && task_p <= 70)
+            else if (task_p >= 31 && task_p <= 65)//25
             {
                 task t(3);
                 t.id = myId;
@@ -324,7 +324,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            else if (task_p >= 71 && task_p <= 100)
+            else if (task_p >= 66 && task_p <= 100)//30
             {
                 task t(4);
                 t.id = myId;

@@ -35,7 +35,7 @@ using namespace veins;
 
 Define_Module(veins::MyMethodUAV);
 
-
+int UAV_num = 0;
 
 
 void MyMethodUAV::initialize(int stage)
@@ -58,6 +58,8 @@ void MyMethodUAV::initialize(int stage)
     else if(stage == 1)
     {
         lastCoord = curPosition;
+        UAV_resource.cal_capability = 1000000 + UAV_num * 80000;
+        UAV_num++;
         UAV_info uavInfo = {curPosition, UAV_resource.cal_capability, UAV_resource.remain_cpu, UAV_resource.remain_memory};
         UAV_maps.insert(std::make_pair(myId, uavInfo));
         EV << "I'm UAV " << myId << ", my calculate capability = " << UAV_resource.cal_capability << endl;
@@ -408,6 +410,8 @@ void MyMethodUAV::handleSelfMsg(cMessage* msg)
             {
                 UAV_resource.remain_cpu += it->require_cpu;
                 UAV_resource.remain_memory += it->require_memory;
+                UAV_maps[myId].remain_cpu = UAV_resource.remain_cpu;
+                UAV_maps[myId].remain_mem = UAV_resource.remain_memory;
                 std::string s = "TaskSendBack_" + std::to_string(it->full_packet_size);
                 TraCIDemo11pMessage *SendBack = new TraCIDemo11pMessage;
                 populateWSM(SendBack);
@@ -463,6 +467,7 @@ void MyMethodUAV::handleSelfMsg(cMessage* msg)
         UAV_maps[myId].Position = curPosition;
         UAV_maps[myId].remain_cpu = UAV_resource.remain_cpu;
         UAV_maps[myId].remain_mem = UAV_resource.remain_memory;
+        EV << "Hello! I'm UAV " << myId << "/ Position = " << UAV_maps[myId].Position << " / cpu = " << UAV_maps[myId].remain_cpu << " / mem= " << UAV_maps[myId].remain_mem << endl;
 
         computeFlyingEnergy();
 
@@ -483,6 +488,8 @@ void MyMethodUAV::handleReceivedTask()
             double cal_time = top_task.packet_size / (UAV_resource.cal_capability * top_task.require_cpu / 100.0);
             UAV_resource.remain_cpu -= top_task.require_cpu;
             UAV_resource.remain_memory -= top_task.require_memory;
+            UAV_maps[myId].remain_cpu = UAV_resource.remain_cpu;
+            UAV_maps[myId].remain_mem = UAV_resource.remain_memory;
             std::string s = "Task_" + std::to_string(top_task.id) + "_" + std::to_string(top_task.packet_size);
             EV << "UAV " << myId << ": handling the task! Handling time = " << cal_time << " / handle size = " << top_task.packet_size << " / Full packet size = " << top_task.full_packet_size << " / remain cpu = " << UAV_resource.remain_cpu << " remain memory = " << UAV_resource.remain_memory << endl;
             UAV_resource.handling_tasks.push_back(top_task);

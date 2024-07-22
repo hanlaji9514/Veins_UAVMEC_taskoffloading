@@ -41,24 +41,24 @@ double averageDelayPercent = 0;
 int TotalPacket = 0;
 double PacketLossTime = 0;
 double SuccessedTime = 0;
-double UAV_cal_capability = 1000000;
+double UAV_cal_capability = 1500000;
 double MEC_cal_capability = 2000000;
 
 std::mt19937 rnd_generator;
 
 LAB_par parameter =
 {
-    0.000005 * 1,    // E1_car = 發送器所耗功率
-    0.000005 * 1, // E2_car = 放大器所耗功率
-    0.000005 * 1,  // E3_car = 接收器所耗功率
+    0.00005 * 1,    // E1_car = 發送器所耗功率
+    0.000001 * 1, // E2_car = 放大器所耗功率
+    0.00005 * 1,  // E3_car = 接收器所耗功率
 
-    0.000005 * 1.25,    // E1_UAV
-    0.000005 * 1.25, // E2_UAV
-    0.000005 * 1.25,  // E3_UAV
+    0.00005 * 1.25,    // E1_UAV
+    0.000001 * 1.25, // E2_UAV
+    0.00005 * 1.25,  // E3_UAV
 
-    0.000005 * 1.75,    // E1_MEC
-    0.000005 * 1.75, // E2_MEC
-    0.000005 * 1.75,  // E3_MEC
+    0.00005 * 1.75,    // E1_MEC
+    0.000001 * 1.75, // E2_MEC
+    0.00005 * 1.75,  // E3_MEC
 
     1000 * 1,    // P_car = 處理任務所耗功率
     1000 * 1.5, // P_UAV
@@ -69,8 +69,8 @@ LAB_par parameter =
     0.5,  // DelayRatio
     0.5,  // EnergyRatio
 
-    0.8,  // DistanceRatio
-    0.2   // ResourceRatio
+    0.2,   // CalculateRatio
+    0.8  // DistanceRatio
 };
 
 Define_Module(veins::GHDSFCar);
@@ -87,7 +87,7 @@ task::task (int q)
         rnd = 100;
     int packet_rnd = rand() % 100;
     int MEC_rnd = rand() % 100;
-    if(MEC_rnd < 0)
+    if(MEC_rnd < 100)
         must_send_MEC = true;
     else
         must_send_MEC = false;
