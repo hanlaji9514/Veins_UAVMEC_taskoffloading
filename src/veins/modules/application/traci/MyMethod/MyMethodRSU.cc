@@ -243,7 +243,7 @@ void MyMethodRSU::handleSelfMsg(cMessage* msg)
             Coord coord = uav.second.Position;
             EV << "UAV ID : " << id << ", Coord : (" << coord.x << ", " << coord.y << ")" << endl;
         }
-        if(Car_map.size() >= 4)
+        if(Car_map.size() >= 5)
         {
             all_clusters = agglomerative_clustering(Car_map, 400);
             for(auto &cluster : all_clusters)
@@ -327,6 +327,7 @@ void MyMethodRSU::handleReceivedTask()
 
 std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LAddress::L2Type, Car_info> Car_map, double threshold)
 {
+/*
     std::vector<Cluster> clusters;
     for(const auto &p : Car_map) // 初始化每一個車輛都是一個獨立的cluster
     {
@@ -397,7 +398,76 @@ std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LA
         }
         clusters = new_clusters;
     }
+*/
+
+    //口試後更新：先找到最小距離的兩個cluster，再將其合併
+    std::vector<Cluster> clusters;
+    for(const auto &p : Car_map) // 初始化每一個車輛都是一個獨立的 cluster
+    {
+        Cluster c;
+        c.CarInCluster.push_back(p.first);
+        clusters.push_back(c);
+    }
+    // 重複直到沒有可以合併的 cluster
+    bool merged = true;
+    while(merged)
+    {
+        merged = false;
+
+        // 記錄當前最小的最大距離
+        double min_max_distance = DBL_MAX;
+        // 記錄需要合併的兩個簇的索引
+        int cluster_index1 = -1;
+        int cluster_index2 = -1;
+
+        // 遍歷所有簇組合，找到最小距離的簇對
+        for(int i = 0; i < clusters.size(); i++)
+        {
+            for(int j = i + 1; j < clusters.size(); j++)
+            {
+                // 計算兩個簇之間的最大距離
+                double distance = complete_linkage(clusters[i], clusters[j]);
+                // 如果最大距離小於當前最小的最大距離，則更新最小的最大距離和對應的簇的索引值
+                if (distance < min_max_distance)
+                {
+                    min_max_distance = distance;
+                    cluster_index1 = i;
+                    cluster_index2 = j;
+                }
+            }
+        }
+        // 如果找到的最小的最大距離小於閾值，則合併這兩個簇
+        if (cluster_index1 != -1 && cluster_index2 != -1 && min_max_distance < threshold)
+        {
+            // 合併這兩個簇
+            Cluster merged_cluster = merge_clusters(clusters[cluster_index1], clusters[cluster_index2]);
+
+            // 將要合併的簇從舊的簇的列表中移除
+            // 先刪除索引較大的簇，再刪除索引較小的簇
+            if (cluster_index1 > cluster_index2)
+            {
+                clusters.erase(clusters.begin() + cluster_index1);
+                clusters.erase(clusters.begin() + cluster_index2);
+            }
+            else
+            {
+                clusters.erase(clusters.begin() + cluster_index2);
+                clusters.erase(clusters.begin() + cluster_index1);
+            }
+
+            // 將合併的簇放進列表
+            clusters.push_back(merged_cluster);
+
+            // 設定合併的標記為 true
+            merged = true;
+        }
+    }
     EV << "clusters.size() = " << clusters.size() << " / UAV_maps.size() = " << UAV_maps.size() << endl;
+    if(clusters.size() < UAV_maps.size())
+        EV << "cluster < UAV!! lower" << endl;
+
+    //口試完修正：不需要split cluster，當cluster < UAV時不增加cluster數量直接Hungarian
+    /*
     while(clusters.size() < UAV_maps.size()) // cluster數量太少，將車輛最多的cluster根據中心點的X座標切成兩半
     {
         EV << "Need to split!" << endl;
@@ -420,6 +490,8 @@ std::vector<Cluster> MyMethodRSU::agglomerative_clustering(std::unordered_map<LA
         else
             spilt_Cluster(clusters, max_index);
     }
+    */
+
     while(clusters.size() > UAV_maps.size()) // cluster數量太多，將車輛數量最少的cluster刪除，不讓它成為UAV的目的地候選(不參與匈牙利演算法)
     {
         EV << "Need to abort the cluster with lowest number!" << endl;
@@ -581,6 +653,14 @@ void MyMethodRSU::compute_hungarian_weight()
         std::transform(distances.begin(), distances.end(), calculate.begin(), weight.begin(), std::plus<double>()); // 將兩種weight加起來
         hungarian_weight.push_back(weight);
     }
+    for(int i=0; i<UAV_maps.size() - all_clusters.size(); i++)
+    {
+        Cluster tmp;
+        tmp.Total_task = -1;
+        all_clusters.push_back(tmp);
+        std::vector<double> tmp_w(UAV_maps.size(), DBL_MAX);
+        hungarian_weight.push_back(tmp_w);
+    }
     EV << "hungarian weight:" << endl;
     for(auto &i : hungarian_weight)
     {
@@ -598,9 +678,17 @@ void MyMethodRSU::compute_hungarian_weight()
     // 輸出每個集群分配給無人機的結果和成本
     for (int i = 0; i < assignment.size(); ++i)
     {
-        EV << "Cluster " << i << " assigned to UAV " << UAV_id[assignment[i]] << " and cost : " << hungarian_weight[i][assignment[i]] << endl;
-        total += hungarian_weight[i][assignment[i]]; // 計算總成本
-        Dispatch_Coord[UAV_id[assignment[i]]] = all_clusters[i].centroid;
+        if(hungarian_weight[i][assignment[i]] == DBL_MAX)
+        {
+            EV << "Fake Cluster is assigned to UAV " << UAV_id[assignment[i]] << endl;
+            Dispatch_Coord[UAV_id[assignment[i]]] = UAV_maps[UAV_id[assignment[i]]].Position; // 沒被分配到的UAV待在原地
+        }
+        else
+        {
+            EV << "Cluster " << i << " assigned to UAV " << UAV_id[assignment[i]] << " and cost : " << hungarian_weight[i][assignment[i]] << endl;
+            total += hungarian_weight[i][assignment[i]]; // 計算總成本
+            Dispatch_Coord[UAV_id[assignment[i]]] = all_clusters[i].centroid;
+        }
     }
     EV << "UAV and its dispatched coordination :" << endl;
     for(auto pair : Dispatch_Coord)

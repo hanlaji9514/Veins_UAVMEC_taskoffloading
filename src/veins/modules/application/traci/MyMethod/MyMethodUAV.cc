@@ -58,7 +58,7 @@ void MyMethodUAV::initialize(int stage)
     else if(stage == 1)
     {
         lastCoord = curPosition;
-        UAV_resource.cal_capability = 1000000 + UAV_num * 80000;
+        //UAV_resource.cal_capability = 1000000 + UAV_num * 80000;
         UAV_num++;
         UAV_info uavInfo = {curPosition, UAV_resource.cal_capability, UAV_resource.remain_cpu, UAV_resource.remain_memory};
         UAV_maps.insert(std::make_pair(myId, uavInfo));

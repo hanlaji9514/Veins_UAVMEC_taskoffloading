@@ -25,6 +25,7 @@
 #include "veins/modules/mobility/TargetedMobility.h"
 #include "veins/modules/mobility/LinearMobility.h"
 #include "veins/veins.h"
+#include "veins/modules/application/traci/common.h" // 所有全域變數宣告在common.h中，並在MyTest11p.cc中定義
 
 using namespace veins;
 
@@ -77,9 +78,25 @@ void TargetedMobility::makeMove()
         stepTarget = destination;
         //move.setSpeed(0);
         move.setStart(stepTarget, simTime()); // 能夠抵達目的地，直接移至目的地
+
+        if(state == false)
+        {
+            //std::cout << "Start hovering! / " << destination << endl;
+            state = true;
+            last_hovering = simTime().dbl();
+        }
+        state = true;
     }
     else
     {
+        if(state == true)
+        {
+            //std::cout << "Stop hovering!" << endl;
+            energyHovering += parameter.Energy_Hovering * (simTime().dbl() - last_hovering);
+            //std::cout << "Hovering Time = " << simTime().dbl() - last_hovering << " / " << last_hovering << " -> " << simTime().dbl() << endl;
+            state = false;
+        }
+        state = false;
         // Move towards the destination
         double angle = atan2(dy, dx);
         stepTarget.x = move.getStartPos().x + move.getSpeed() * cos(angle) * SIMTIME_DBL(updateInterval);

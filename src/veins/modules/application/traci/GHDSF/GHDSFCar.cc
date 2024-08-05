@@ -41,7 +41,7 @@ double averageDelayPercent = 0;
 int TotalPacket = 0;
 double PacketLossTime = 0;
 double SuccessedTime = 0;
-double UAV_cal_capability = 1500000;
+double UAV_cal_capability = 1000000;
 double MEC_cal_capability = 2000000;
 
 std::mt19937 rnd_generator;
@@ -65,6 +65,7 @@ LAB_par parameter =
     1000 * 2, // P_MEC
 
     20000, // Energy_perMeter
+    50000, // Energy_Hovering
 
     0.5,  // DelayRatio
     0.5,  // EnergyRatio
@@ -87,7 +88,7 @@ task::task (int q)
         rnd = 100;
     int packet_rnd = rand() % 100;
     int MEC_rnd = rand() % 100;
-    if(MEC_rnd < 100)
+    if(MEC_rnd < 40)
         must_send_MEC = true;
     else
         must_send_MEC = false;
@@ -197,7 +198,7 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -239,7 +240,7 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -281,7 +282,7 @@ void GHDSFCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -475,7 +476,7 @@ void GHDSFCar::handleSelfMsg(cMessage* msg)
                             if(simTime() > it2->first.expire_time)
                             {
                                 PacketLossTime++;
-                                averageDelayPercent += 1.0;
+                                averageDelayPercent += 1.1;
                                 EV << myId << ": Full packet Size = " << it2->first.packet_size << " : packet loss!" << " Packet Loss Time : " << PacketLossTime << endl;
                                 EV << "The expire time : " << it2->first.expire_time << ", and now is : " << simTime() << endl;
                             }
@@ -571,7 +572,7 @@ void GHDSFCar::clearExpiredTask() // 在node離開地圖前，刪除已過期的
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << it->first.packet_size << " / Packet loss time : " << PacketLossTime << endl;
             it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
             continue;
@@ -587,7 +588,7 @@ void GHDSFCar::clearExpiredTask() // 在node離開地圖前，刪除已過期的
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
         else
@@ -717,7 +718,7 @@ void GHDSFCar::CoCaCoTaskOffloading()
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
     }
@@ -1014,7 +1015,7 @@ void GHDSFCar::dispatchTaskConsiderEnergy()
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
         EV << "-------------------------" << endl;
@@ -1132,13 +1133,15 @@ void GHDSFCar::finish()
     EV << "Successed_Car = " << Successed_Car << endl;
     EV << "Successed_UAV = " << Successed_UAV << endl;
     EV << "Successed_MEC = " << Successed_MEC << endl;
+    EV << "Successed_UAV_MEC = " << Successed_UAV_MEC << endl;
     EV << "Can't Find Offload = " << CantFindOffload << endl;
     EV << "Total Energy Consumption = " << energyComputing + energyCommunication + energyFlying << endl; // J
     EV << "Energy in Computing = " << energyComputing << endl;
     EV << "Energy in Communication = " << energyCommunication << endl;
     EV << "Energy in UAV Flying = " << energyFlying << endl;
+    EV << "Energy in UAV Hovering = " << energyHovering << endl;
     EV << "The size of successful Task = " << taskSize << endl;
-    EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl; // bit/J
+    EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying + energyHovering) << endl; // bit/J
 
     EV << TransRate << endl;
     EV << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
@@ -1146,7 +1149,8 @@ void GHDSFCar::finish()
     EV << energyComputing << endl;
     EV << energyCommunication << endl;
     EV << energyFlying << endl;
-    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl;
+    EV << energyHovering << endl;
+    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying + energyHovering) << endl;
 
     recordScalar("TotalPacket", TotalPacket);
     recordScalar("Packet loss Time", PacketLossTime);
@@ -1166,6 +1170,7 @@ void GHDSFCar::finish()
     recordScalar("EnergyComputing", energyComputing);
     recordScalar("EnergyCommunication", energyCommunication);
     recordScalar("EnergyFlying", energyFlying);
+    recordScalar("EnergyHovering", energyHovering);
     recordScalar("taskSize", taskSize);
     recordScalar("energyEfficiency", taskSize * 8 / (energyComputing + energyCommunication + energyFlying));
 }

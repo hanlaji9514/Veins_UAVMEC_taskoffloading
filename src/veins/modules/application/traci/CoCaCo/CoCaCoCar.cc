@@ -98,7 +98,7 @@ void CoCaCoCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -139,7 +139,7 @@ void CoCaCoCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -180,7 +180,7 @@ void CoCaCoCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -369,7 +369,7 @@ void CoCaCoCar::handleSelfMsg(cMessage* msg)
                             if(simTime() > it2->first.expire_time)
                             {
                                 PacketLossTime++;
-                                averageDelayPercent += 1.0;
+                                averageDelayPercent += 1.1;
                                 EV << myId << ": Full packet Size = " << it2->first.packet_size << " : packet loss!" << " Packet Loss Time : " << PacketLossTime << endl;
                                 EV << "The expire time : " << it2->first.expire_time << ", and now is : " << simTime() << endl;
                             }
@@ -464,7 +464,7 @@ void CoCaCoCar::clearExpiredTask()
         if (it->first.expire_time < simTime().dbl())
         {
             PacketLossTime++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << it->first.packet_size << " / Packet loss time : " << PacketLossTime << endl;
             it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
             continue;
@@ -480,7 +480,7 @@ void CoCaCoCar::clearExpiredTask()
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
         else
@@ -496,7 +496,7 @@ void CoCaCoCar::clearExpiredTask()
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << endl;
         }
         else
@@ -656,7 +656,7 @@ void CoCaCoCar::CoCaCoTaskOffloading()
         else
         {
             PacketLossTime++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Must MEC = " << top_task.must_send_MEC << " / Packet loss time : " << PacketLossTime << endl;
         }
     }
@@ -710,51 +710,56 @@ void CoCaCoCar::finish()
     double TransRate = (SuccessedTime / (SuccessedTime + PacketLossTime));
     double PacketLossRate = (PacketLossTime / (SuccessedTime + PacketLossTime));
     EV << "Total Packet : " << TotalPacket << endl;
-    EV << "Packet loss Time = " << PacketLossTime << endl;
-    EV << "Transmission Successes Time = " << SuccessedTime << endl;
-    EV << "Transmission Rate = " << TransRate << endl;
-    EV << "Packet Loss Rate = " << PacketLossRate << endl;
-    EV << "averageDelayPercent = " << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
-    EV << "CAR_SELF = " << CAR_SELF << endl;
-    EV << "CAR_UAV = " << CAR_UAV << endl;
-    EV << "CAR_MEC = " << CAR_MEC << endl;
-    EV << "CAR_UAV_MEC = " << CAR_UAV_MEC << endl;
-    EV << "Successed_Car = " << Successed_Car << endl;
-    EV << "Successed_UAV = " << Successed_UAV << endl;
-    EV << "Successed_MEC = " << Successed_MEC << endl;
-    EV << "Successed_UAV_MEC = " << Successed_UAV_MEC << endl;
-    EV << "Total Energy Consumption = " << energyComputing + energyCommunication + energyFlying << endl; // J
-    EV << "Energy in Computing = " << energyComputing << endl;
-    EV << "Energy in Communication = " << energyCommunication << endl;
-    EV << "Energy in UAV Flying = " << energyFlying << endl;
-    EV << "The size of successful Task = " << taskSize << endl;
-    EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl; // bit/J
+        EV << "Packet loss Time = " << PacketLossTime << endl;
+        EV << "Transmission Successes Time = " << SuccessedTime << endl;
+        EV << "Transmission Rate = " << TransRate << endl;
+        EV << "Packet Loss Rate = " << PacketLossRate << endl;
+        EV << "averageDelayPercent = " << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
+        EV << "CAR_SELF = " << CAR_SELF << endl;
+        EV << "CAR_UAV = " << CAR_UAV << endl;
+        EV << "CAR_MEC = " << CAR_MEC << endl;
+        EV << "CAR_UAV_MEC = " << CAR_UAV_MEC << endl;
+        EV << "Successed_Car = " << Successed_Car << endl;
+        EV << "Successed_UAV = " << Successed_UAV << endl;
+        EV << "Successed_MEC = " << Successed_MEC << endl;
+        EV << "Successed_UAV_MEC = " << Successed_UAV_MEC << endl;
+        EV << "Can't Find Offload = " << CantFindOffload << endl;
+        EV << "Total Energy Consumption = " << energyComputing + energyCommunication + energyFlying << endl; // J
+        EV << "Energy in Computing = " << energyComputing << endl;
+        EV << "Energy in Communication = " << energyCommunication << endl;
+        EV << "Energy in UAV Flying = " << energyFlying << endl;
+        EV << "Energy in UAV Hovering = " << energyHovering << endl;
+        EV << "The size of successful Task = " << taskSize << endl;
+        EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying + energyHovering) << endl; // bit/J
 
-    EV << TransRate << endl;
-    EV << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
-    EV << energyComputing + energyCommunication + energyFlying << endl;
-    EV << energyComputing << endl;
-    EV << energyCommunication << endl;
-    EV << energyFlying << endl;
-    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl;
+        EV << TransRate << endl;
+        EV << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
+        EV << energyComputing + energyCommunication + energyFlying << endl;
+        EV << energyComputing << endl;
+        EV << energyCommunication << endl;
+        EV << energyFlying << endl;
+        EV << energyHovering << endl;
+        EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying + energyHovering) << endl;
 
-    recordScalar("TotalPacket", TotalPacket);
-    recordScalar("Packet loss Time", PacketLossTime);
-    recordScalar("Transmission Successes Time", SuccessedTime);
-    recordScalar("Transmission Rate", TransRate);
-    recordScalar("Packet Loss Rate", PacketLossRate);
-    recordScalar("averageDelayPercent", (averageDelayPercent / (SuccessedTime + PacketLossTime)));
-    recordScalar("CAR_SELF", CAR_SELF);
-    recordScalar("CAR_UAV", CAR_UAV);
-    recordScalar("CAR_MEC", CAR_MEC);
-    recordScalar("CAR_UAV_MEC", CAR_UAV_MEC);
-    recordScalar("Successed_Car", Successed_Car);
-    recordScalar("Successed_UAV", Successed_UAV);
-    recordScalar("Successed_MEC", Successed_MEC);
-    recordScalar("Successed_UAV_MEC", Successed_UAV_MEC);
-    recordScalar("EnergyComputing", energyComputing);
-    recordScalar("EnergyCommunication", energyCommunication);
-    recordScalar("EnergyFlying", energyFlying);
-    recordScalar("taskSize", taskSize);
-    recordScalar("energyEfficiency", taskSize * 8 / (energyComputing + energyCommunication + energyFlying));
+        recordScalar("TotalPacket", TotalPacket);
+        recordScalar("Packet loss Time", PacketLossTime);
+        recordScalar("Transmission Successes Time", SuccessedTime);
+        recordScalar("Transmission Rate", TransRate);
+        recordScalar("Packet Loss Rate", PacketLossRate);
+        recordScalar("averageDelayPercent", (averageDelayPercent / (SuccessedTime + PacketLossTime)));
+        recordScalar("CAR_SELF", CAR_SELF);
+        recordScalar("CAR_UAV", CAR_UAV);
+        recordScalar("CAR_MEC", CAR_MEC);
+        recordScalar("CAR_UAV_MEC", CAR_UAV_MEC);
+        recordScalar("Successed_Car", Successed_Car);
+        recordScalar("Successed_UAV", Successed_UAV);
+        recordScalar("Successed_MEC", Successed_MEC);
+        recordScalar("Successed_UAV_MEC", Successed_UAV_MEC);
+        recordScalar("Can't Find Offload", CantFindOffload);
+        recordScalar("EnergyComputing", energyComputing);
+        recordScalar("EnergyCommunication", energyCommunication);
+        recordScalar("EnergyFlying", energyFlying);
+        recordScalar("EnergyHovering", energyHovering);
+        recordScalar("taskSize", taskSize);
+        recordScalar("energyEfficiency", taskSize * 8 / (energyComputing + energyCommunication + energyFlying));
 }

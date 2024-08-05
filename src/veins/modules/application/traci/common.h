@@ -55,6 +55,7 @@ struct LAB_par
     double P_MEC;
 
     double Energy_perMeter; // 無人機每移動一個單位所需耗能(J)
+    double Energy_Hovering; // UAV懸停的能量消耗功率(W)
 
     double DelayRatio;
     double EnergyRatio;
@@ -98,6 +99,7 @@ extern long long taskSize;
 extern long double energyComputing;
 extern long double energyCommunication;
 extern long double energyFlying;
+extern long double energyHovering;
 
 extern int CAR_SELF;
 extern int CAR_UAV;

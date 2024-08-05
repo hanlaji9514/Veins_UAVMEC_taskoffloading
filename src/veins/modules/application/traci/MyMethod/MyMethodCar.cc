@@ -42,6 +42,7 @@ long long taskSize = 0;
 long double energyComputing = 0;
 long double energyCommunication = 0;
 long double energyFlying = 0;
+long double energyHovering = 0;
 
 Define_Module(veins::MyMethodCar);
 
@@ -110,7 +111,7 @@ void MyMethodCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -153,7 +154,7 @@ void MyMethodCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -196,7 +197,7 @@ void MyMethodCar::onWSM(BaseFrame1609_4* frame)
                     if(simTime() > it->first.expire_time)
                     {
                         PacketLossTime++;
-                        averageDelayPercent += 1.0;
+                        averageDelayPercent += 1.1;
                         EV << myId << ": Size = " << it->first.packet_size << " : packet loss!" << " / Packet Loss Time : " << PacketLossTime << endl;
                         EV << "The expire time : " << it->first.expire_time << ", and now is : " << simTime() << endl;
                     }
@@ -294,13 +295,13 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
 {
     if(!strcmp(msg->getName(), "generate_task"))
     {
-        int numtasks = intuniform(10,18);
+        int numtasks = intuniform(3,8);
         TotalPacket += numtasks;
         Car_map[myId].Num_Task += numtasks;
         for(int i=0; i<numtasks; i++)
         {
             int task_p =  intuniform(1,100);
-            if (task_p >= 1 && task_p <= 15) // 使用if-else來判斷範圍(20)
+            if (task_p >= 1 && task_p <= 25) // 使用if-else來判斷範圍(20)
             {
                 task t(1);
                 t.id = myId;
@@ -308,7 +309,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            else if (task_p >= 16 && task_p <= 30)//(25)
+            else if (task_p >= 21 && task_p <= 45)//(25)
             {
                 task t(2);
                 t.id = myId;
@@ -316,7 +317,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            else if (task_p >= 31 && task_p <= 65)//25
+            else if (task_p >= 46 && task_p <= 70)//25
             {
                 task t(3);
                 t.id = myId;
@@ -324,7 +325,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                 t.expire_time = t.start_time + t.delay_limit;
                 node_resource.pending_tasks.push(t);
             }
-            else if (task_p >= 66 && task_p <= 100)//30
+            else if (task_p >= 71 && task_p <= 100)//30
             {
                 task t(4);
                 t.id = myId;
@@ -391,7 +392,7 @@ void MyMethodCar::handleSelfMsg(cMessage* msg)
                             if(simTime() > it2->first.expire_time)
                             {
                                 PacketLossTime++;
-                                averageDelayPercent += 1.0;
+                                averageDelayPercent += 1.1;
                                 EV << myId << ": Full packet Size = " << it2->first.packet_size << " : packet loss!" << " Packet Loss Time : " << PacketLossTime << endl;
                                 EV << "The expire time : " << it2->first.expire_time << ", and now is : " << simTime() << endl;
                             }
@@ -488,7 +489,7 @@ void MyMethodCar::clearExpiredTask() // 在node離開地圖前，刪除已過期
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << it->first.packet_size << " / Packet loss time : " << PacketLossTime << endl;
             it = node_resource.waiting_tasks.erase(it);  // 刪除符合條件的元素並更新迭代器
             continue;
@@ -931,7 +932,7 @@ void MyMethodCar::dispatchTaskConsiderEnergy()
         {
             PacketLossTime++;
             CantFindOffload++;
-            averageDelayPercent += 1.0;
+            averageDelayPercent += 1.1;
             EV << myId << " : My Task is expired, packet loss! Size = " << top_task.packet_size << " / Packet loss time : " << PacketLossTime << " / must_send_MEC = " << top_task.must_send_MEC << endl;
         }
         EV << "-------------------------" << endl;
@@ -972,8 +973,9 @@ void MyMethodCar::finish()
     EV << "Energy in Computing = " << energyComputing << endl;
     EV << "Energy in Communication = " << energyCommunication << endl;
     EV << "Energy in UAV Flying = " << energyFlying << endl;
+    EV << "Energy in UAV Hovering = " << energyHovering << endl;
     EV << "The size of successful Task = " << taskSize << endl;
-    EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl; // bit/J
+    EV << "Energy Efficiency = " << taskSize * 8 / (energyComputing + energyCommunication + energyFlying + energyHovering) << endl; // bit/J
 
     EV << TransRate << endl;
     EV << (averageDelayPercent / (SuccessedTime + PacketLossTime)) << endl;
@@ -981,7 +983,8 @@ void MyMethodCar::finish()
     EV << energyComputing << endl;
     EV << energyCommunication << endl;
     EV << energyFlying << endl;
-    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying) << endl;
+    EV << energyHovering << endl;
+    EV << taskSize * 8 / (energyComputing + energyCommunication + energyFlying + energyHovering) << endl;
 
     recordScalar("TotalPacket", TotalPacket);
     recordScalar("Packet loss Time", PacketLossTime);
@@ -1001,6 +1004,7 @@ void MyMethodCar::finish()
     recordScalar("EnergyComputing", energyComputing);
     recordScalar("EnergyCommunication", energyCommunication);
     recordScalar("EnergyFlying", energyFlying);
+    recordScalar("EnergyHovering", energyHovering);
     recordScalar("taskSize", taskSize);
     recordScalar("energyEfficiency", taskSize * 8 / (energyComputing + energyCommunication + energyFlying));
 }

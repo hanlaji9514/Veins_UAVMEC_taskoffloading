@@ -48,6 +48,9 @@ protected:
     Coord stepTarget;
     Coord destination;
 
+    bool state = false; // This UAV is hovering(True) or flying(False)
+    double last_hovering;
+
 public:
     /** @brief Initializes mobility model parameters.*/
     void initialize(int) override;
